@@ -1,0 +1,12 @@
+{
+  "name": "@bimebazar/mpa-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/mpaWorkflow.d.ts",
+      "default": "./src/mpaWorkflow.mjs"
+    }
+  }
+}

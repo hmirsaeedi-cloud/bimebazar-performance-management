@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Performance Roadmap</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-lockup">
+        <img src="assets/roadmap-mark.svg" alt="" class="brand-mark" />
+        <div>
+          <p class="eyebrow">BimeBazar Performance Management</p>
+          <h1>Vibe-Coding Roadmap</h1>
+        </div>
+      </div>
+      <div class="header-stats" aria-label="Roadmap summary">
+        <div><strong>10</strong><span>Sprints</span></div>
+        <div><strong>48</strong><span>Features</span></div>
+        <div><strong>5</strong><span>Phases</span></div>
+      </div>
+    </header>
+
+    <main>
+      <section class="strategy-panel" aria-labelledby="strategy-title">
+        <div>
+          <h2 id="strategy-title">Build Strategy</h2>
+          <p>
+            Start with auth, profiles, RBAC, and Jalali calendar foundations. Then
+            ship the process engine, form engine, and evaluation chain before
+            adding PIP, promotion, analytics, notifications, and post-MVP depth.
+          </p>
+        </div>
+        <div class="phase-strip" id="phaseStrip" aria-label="Roadmap phases"></div>
+      </section>
+
+      <section class="controls" aria-label="Roadmap filters">
+        <div class="filter-group" id="priorityFilters" aria-label="Priority filters"></div>
+        <label class="search-box">
+          <span>Search</span>
+          <input id="searchInput" type="search" placeholder="Feature, module, sprint..." />
+        </label>
+      </section>
+
+      <section class="summary-row" id="summaryRow" aria-live="polite"></section>
+
+      <section id="roadmap" class="roadmap" aria-label="Feature roadmap"></section>
+    </main>
+
+    <dialog id="featureDialog" class="feature-dialog">
+      <form method="dialog" class="dialog-shell">
+        <button class="icon-button dialog-close" value="close" aria-label="Close details">×</button>
+        <div id="dialogContent"></div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>

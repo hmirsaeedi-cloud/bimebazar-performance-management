@@ -1,0 +1,22 @@
+{
+  "businessUnits": [
+    {
+      "name": "Default Business Unit",
+      "departments": [
+        {
+          "name": "Default Department",
+          "teams": [{ "name": "Default Team" }]
+        }
+      ]
+    }
+  ],
+  "firstAdminProfile": {
+    "email": "h.mirsaeedi@bimebazar.com",
+    "displayName": "Hossein Mirsaeedi",
+    "employeeId": "BB-0001",
+    "role": "HR_ADMIN",
+    "status": "active",
+    "level": "L7",
+    "positionTitle": "HR Admin"
+  }
+}

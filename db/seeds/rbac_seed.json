@@ -1,0 +1,12 @@
+{
+  "roles": ["EMPLOYEE", "MANAGER", "NEXT_LEVEL_MANAGER", "HRBP", "HR_ADMIN"],
+  "assignmentTypes": ["manual", "computed"],
+  "initialAssignments": [
+    {
+      "email": "h.mirsaeedi@bimebazar.com",
+      "roles": ["HR_ADMIN"],
+      "status": "active",
+      "reason": "Initial platform administrator"
+    }
+  ]
+}

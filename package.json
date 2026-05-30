@@ -1,0 +1,19 @@
+{
+  "name": "bimebazar-performance-management",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo scaffold for the BimeBazar Performance Management platform.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "node --test packages/*/tests/*.test.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/web run dev"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Form Builder</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --gold: #c48922;
+        --danger: #b13d3a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 28px 18px 48px;
+      }
+
+      header,
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: clamp(1.8rem, 4vw, 3rem);
+      }
+
+      h2 {
+        margin: 0 0 12px;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      section {
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(160px, 1fr));
+        gap: 12px;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 750;
+      }
+
+      input,
+      select,
+      textarea {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        color: var(--ink);
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 92px;
+        resize: vertical;
+      }
+
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+
+      button.secondary {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+      }
+
+      button.warning {
+        background: var(--gold);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 11px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #e8f4f2;
+        color: #075b5b;
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+
+      .message {
+        display: none;
+        margin-top: 12px;
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .message.error {
+        display: block;
+        border: 1px solid #efb3ad;
+        background: #fff0ee;
+        color: var(--danger);
+      }
+
+      .message.success {
+        display: block;
+        border: 1px solid #b8dfc2;
+        background: #eefaf1;
+        color: #245f37;
+      }
+
+      pre {
+        overflow: auto;
+        border-radius: 8px;
+        background: #172026;
+        color: #e7f2ef;
+        padding: 14px;
+        font-size: 0.82rem;
+      }
+
+      @media (max-width: 860px) {
+        header,
+        .toolbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        table {
+          display: block;
+          overflow-x: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Form Builder</h1>
+          <p>Temporary HR Admin screen for creating versioned form templates.</p>
+        </div>
+        <nav>
+          <a href="/temp-profiles.html">Profiles page</a>
+          <a href="/temp-mpa.html" style="margin-left: 12px">MPA workflow</a>
+          <a href="/temp-process-engine.html" style="margin-left: 12px">Process engine</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Create Template</h2>
+        <form id="formTemplate" class="grid">
+          <label>Name<input id="name" value="Self-assessment template" required /></label>
+          <label>Module
+            <select id="module">
+              <option value="self_assessment">Self-assessment</option>
+              <option value="manager_evaluation">Manager evaluation</option>
+              <option value="upward_feedback">Upward feedback</option>
+              <option value="survey">Survey</option>
+              <option value="evaluation">Evaluation</option>
+            </select>
+          </label>
+          <label>Description<input id="description" value="Covers every PRD question type." /></label>
+          <button type="submit">Create draft with all question types</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh list</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Templates</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Module</th>
+              <th>Status</th>
+              <th>Version</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Draft Schema Preview</h2>
+        <pre id="preview"></pre>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const preview = document.querySelector("#preview");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) {
+          throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        }
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function allQuestionTypesSchema() {
+        return {
+          title: document.querySelector("#name").value,
+          description: document.querySelector("#description").value,
+          sections: [
+            {
+              id: "section-core",
+              title: "Core responses",
+              questions: [
+                { id: "q-short", type: "short_text", label: "One-line achievement", required: true },
+                { id: "q-long", type: "long_text", label: "Detailed reflection", required: true },
+                { id: "q-rich", type: "rich_text", label: "Manager notes with formatting", required: false },
+                { id: "q-number", type: "number", label: "Completed initiatives", required: true, min: 0, step: 1 },
+                { id: "q-scale", type: "scale", label: "Overall confidence", required: true, min: 1, max: 5, weight: 20 },
+                {
+                  id: "q-single",
+                  type: "single_select",
+                  label: "Primary strength",
+                  required: true,
+                  options: [
+                    { id: "opt-execution", label: "Execution", value: "execution" },
+                    { id: "opt-collaboration", label: "Collaboration", value: "collaboration" },
+                  ],
+                },
+                {
+                  id: "q-multi",
+                  type: "multi_select",
+                  label: "Support needed",
+                  required: false,
+                  options: [
+                    { id: "opt-coaching", label: "Coaching", value: "coaching" },
+                    { id: "opt-priority", label: "Priority clarity", value: "priority_clarity" },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "section-admin",
+              title: "Administrative inputs",
+              questions: [
+                { id: "q-date", type: "date", label: "Target completion date", required: false },
+                { id: "q-boolean", type: "boolean", label: "Ready for calibration", required: true },
+                { id: "q-file", type: "file", label: "Evidence attachment", required: false },
+                { id: "q-employee", type: "employee_reference", label: "Feedback provider", required: false },
+                { id: "q-heading", type: "section_heading", label: "Private HR notes", required: false },
+              ],
+            },
+          ],
+        };
+      }
+
+      async function writeAuditEvent(action, entityId, fromStatus, toStatus, metadata, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            action,
+            entity_type: "form_template",
+            entity_id: entityId,
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata,
+          }),
+        });
+      }
+
+      async function loadTemplates() {
+        const templates = await supabaseFetch(
+          "/rest/v1/form_templates?select=id,name,module,status,current_version_id,form_template_versions(id,version_number,status)&order=updated_at.desc",
+        );
+        countLabel.textContent = `${templates.length} template${templates.length === 1 ? "" : "s"}`;
+        rows.innerHTML = templates.map((template) => {
+          const version = (template.form_template_versions || []).find((item) => item.id === template.current_version_id);
+          return `
+            <tr>
+              <td>${template.name}</td>
+              <td>${template.module}</td>
+              <td><span class="pill">${template.status}</span></td>
+              <td>${version ? version.version_number : "-"}</td>
+              <td>
+                ${template.status === "draft" ? `<button class="warning" data-publish="${template.id}" data-version="${template.current_version_id}">Publish</button>` : ""}
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        document.querySelectorAll("[data-publish]").forEach((button) => {
+          button.addEventListener("click", () => publishTemplate(button.dataset.publish, button.dataset.version).catch((error) => showMessage(error.message, "error")));
+        });
+      }
+
+      async function publishTemplate(templateId, versionId) {
+        const now = new Date().toISOString();
+        await supabaseFetch(`/rest/v1/form_template_versions?id=eq.${versionId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            status: "published",
+            published_by: currentUser.id,
+            published_at: now,
+          }),
+        });
+        await supabaseFetch(`/rest/v1/form_templates?id=eq.${templateId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            status: "published",
+            owner_role: "HRBP",
+            updated_by: currentUser.id,
+            updated_at: now,
+          }),
+        });
+        await writeAuditEvent("form_template.published", templateId, "draft", "published", {
+          owner: "HRBP",
+          nextAction: "return_to_draft",
+          currentVersionId: versionId,
+        });
+        showMessage("Template published.", "success");
+        await loadTemplates();
+      }
+
+      document.querySelector("#formTemplate").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const schema = allQuestionTypesSchema();
+          const templateId = crypto.randomUUID();
+          const versionId = crypto.randomUUID();
+          await supabaseFetch("/rest/v1/form_templates", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              id: templateId,
+              name: document.querySelector("#name").value,
+              description: document.querySelector("#description").value || null,
+              module: document.querySelector("#module").value,
+              status: "draft",
+              owner_role: "HR_ADMIN",
+              created_by: currentUser.id,
+              updated_by: currentUser.id,
+            }),
+          });
+          await supabaseFetch("/rest/v1/form_template_versions", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              id: versionId,
+              template_id: templateId,
+              version_number: 1,
+              status: "draft",
+              schema,
+              created_by: currentUser.id,
+            }),
+          });
+          await supabaseFetch(`/rest/v1/form_templates?id=eq.${templateId}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ current_version_id: versionId }),
+          });
+          await writeAuditEvent("form_template.created", templateId, null, "draft", {
+            owner: "HR_ADMIN",
+            nextAction: "publish",
+            versionId,
+            questionCount: schema.sections.reduce((sum, section) => sum + section.questions.length, 0),
+          });
+          showMessage("Draft form template created.", "success");
+          await loadTemplates();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      document.querySelector("#refreshButton").addEventListener("click", () => loadTemplates().catch((error) => showMessage(error.message, "error")));
+      preview.textContent = JSON.stringify(allQuestionTypesSchema(), null, 2);
+      document.querySelector("#name").addEventListener("input", () => {
+        preview.textContent = JSON.stringify(allQuestionTypesSchema(), null, 2);
+      });
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadTemplates();
+        } catch (error) {
+          showMessage(error.message, "error");
+          countLabel.textContent = "Could not load templates";
+        }
+      })();
+    </script>
+  </body>
+</html>

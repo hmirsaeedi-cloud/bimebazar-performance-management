@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Login</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --danger: #b13d3a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        display: grid;
+        min-height: 100vh;
+        margin: 0;
+        place-items: center;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(440px, calc(100vw - 32px));
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 28px;
+        background: var(--panel);
+        box-shadow: 0 16px 48px rgba(22, 40, 48, 0.12);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.8rem;
+      }
+
+      p {
+        margin: 0 0 22px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      form,
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.84rem;
+        font-weight: 750;
+      }
+
+      input {
+        height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 12px;
+        color: var(--ink);
+        font: inherit;
+      }
+
+      button {
+        min-height: 44px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+
+      .message {
+        display: none;
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .message.error {
+        display: block;
+        border: 1px solid #efb3ad;
+        background: #fff0ee;
+        color: var(--danger);
+      }
+
+      .message.success {
+        display: block;
+        border: 1px solid #b8dfc2;
+        background: #eefaf1;
+        color: #245f37;
+      }
+
+      .profile {
+        display: none;
+        margin-top: 18px;
+        border-top: 1px solid var(--line);
+        padding-top: 18px;
+      }
+
+      .profile.visible {
+        display: grid;
+        gap: 8px;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .row span {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>BimeBazar Login</h1>
+      <p>Temporary local login page for the Performance Management platform.</p>
+
+      <form id="loginForm">
+        <label>
+          Email
+          <input id="email" type="email" value="h.mirsaeedi@bimebazar.com" autocomplete="email" required />
+        </label>
+        <label>
+          Password
+          <input id="password" type="password" autocomplete="current-password" required />
+        </label>
+        <div id="message" class="message"></div>
+        <button id="submitButton" type="submit">Sign in</button>
+      </form>
+
+      <section id="profile" class="profile" aria-live="polite"></section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+
+      const form = document.querySelector("#loginForm");
+      const message = document.querySelector("#message");
+      const profile = document.querySelector("#profile");
+      const submitButton = document.querySelector("#submitButton");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      function clearMessage() {
+        message.textContent = "";
+        message.className = "message";
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+
+        if (!response.ok) {
+          throw new Error(data?.msg || data?.message || data?.error_description || "Request failed");
+        }
+
+        return data;
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        clearMessage();
+        profile.className = "profile";
+        profile.innerHTML = "";
+        submitButton.disabled = true;
+        submitButton.textContent = "Signing in...";
+
+        try {
+          const email = document.querySelector("#email").value;
+          const password = document.querySelector("#password").value;
+          const session = await supabaseFetch("/auth/v1/token?grant_type=password", {
+            method: "POST",
+            body: JSON.stringify({ email, password }),
+          });
+
+          const rows = await supabaseFetch(
+            "/rest/v1/profiles?select=id,email,display_name,employee_id,role_code,account_status&limit=1",
+            {
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            },
+          );
+
+          const user = rows[0];
+          if (!user) {
+            throw new Error("Login worked, but no platform profile was found.");
+          }
+
+          showMessage("Login successful.", "success");
+          profile.className = "profile visible";
+          profile.innerHTML = `
+            <div class="row"><span>Name</span><strong>${user.display_name}</strong></div>
+            <div class="row"><span>Email</span><strong>${user.email}</strong></div>
+            <div class="row"><span>Role</span><strong>${user.role_code}</strong></div>
+            <div class="row"><span>Status</span><strong>${user.account_status}</strong></div>
+          `;
+        } catch (error) {
+          showMessage(error.message || "Could not sign in.", "error");
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "Sign in";
+        }
+      });
+    </script>
+  </body>
+</html>

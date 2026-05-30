@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Bulk Employee Import</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --gold: #c48922;
+        --danger: #b13d3a;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 28px 18px 48px;
+      }
+
+      header,
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; }
+      p { margin: 0; color: var(--muted); }
+
+      section {
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 750;
+      }
+
+      input,
+      textarea {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        color: var(--ink);
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 220px;
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.82rem;
+      }
+
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+
+      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+      button.warning { background: var(--gold); }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 12px;
+        align-items: end;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(120px, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .summary div {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        background: #fbfdfc;
+      }
+
+      .summary strong {
+        display: block;
+        font-size: 1.5rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th { color: var(--muted); font-size: 0.78rem; }
+
+      .pill {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #e8f4f2;
+        color: #075b5b;
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+
+      .pill.invalid,
+      .pill.error { background: #fff0ee; color: var(--danger); }
+
+      .message {
+        display: none;
+        margin-top: 12px;
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+
+      @media (max-width: 860px) {
+        header,
+        .toolbar,
+        .grid { align-items: stretch; grid-template-columns: 1fr; flex-direction: column; }
+        .summary { grid-template-columns: 1fr 1fr; }
+        table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Bulk Employee Import</h1>
+          <p>Paste rows from Excel, preview validation, then create employees in Supabase.</p>
+        </div>
+        <nav>
+          <a href="/employee-import-template.csv">Download template</a>
+          <a href="/temp-profiles.html" style="margin-left: 12px">Profiles</a>
+          <a href="/temp-mpa.html" style="margin-left: 12px">MPA</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Import Rows</h2>
+        <div class="grid">
+          <label>Source Filename<input id="sourceFilename" value="employee-import.csv" /></label>
+          <button id="previewButton" type="button">Preview rows</button>
+          <button class="warning" id="processButton" type="button">Create employees</button>
+        </div>
+        <label style="margin-top: 12px">CSV copied from Excel
+          <textarea id="csvInput">email,employeeId,fullNamePersian,fullNameEnglish,joinDate,businessUnitName,departmentName,teamName,level,positionTitle,managerEmail,phone
+new.employee@bimebazar.com,BB-1001,نام کارمند,New Employee,1403-01-15,Default Business Unit,Default Department,Default Team,L1,Insurance Advisor,,09120000000</textarea>
+        </label>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Validation Preview</h2>
+            <p id="countLabel">No rows previewed yet</p>
+          </div>
+        </div>
+        <div class="summary">
+          <div><strong id="totalRows">0</strong><span>Total rows</span></div>
+          <div><strong id="validRows">0</strong><span>Valid</span></div>
+          <div><strong id="invalidRows">0</strong><span>Invalid</span></div>
+          <div><strong id="statusLabel">-</strong><span>Status</span></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Row</th>
+              <th>Email</th>
+              <th>Employee ID</th>
+              <th>Name</th>
+              <th>Team</th>
+              <th>Status</th>
+              <th>Errors</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Recent Import Runs</h2>
+            <p id="runCount">Loading...</p>
+          </div>
+          <button class="secondary" id="refreshRunsButton" type="button">Refresh runs</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th>Created</th>
+              <th>Errors</th>
+              <th>Created At</th>
+            </tr>
+          </thead>
+          <tbody id="runRows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let orgUnits = { businessUnits: [], departments: [], teams: [] };
+      let profiles = [];
+      let preview = null;
+
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const runRows = document.querySelector("#runRows");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function parseCsv(text) {
+        const lines = text.trim().split(/\r?\n/).filter(Boolean);
+        const headers = splitCsvLine(lines.shift() || "");
+        return lines.map((line) => {
+          const values = splitCsvLine(line);
+          return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+        });
+      }
+
+      function splitCsvLine(line) {
+        const cells = [];
+        let cell = "";
+        let quoted = false;
+        for (let i = 0; i < line.length; i += 1) {
+          const char = line[i];
+          if (char === '"' && line[i + 1] === '"') {
+            cell += '"';
+            i += 1;
+          } else if (char === '"') {
+            quoted = !quoted;
+          } else if (char === "," && !quoted) {
+            cells.push(cell.trim());
+            cell = "";
+          } else {
+            cell += char;
+          }
+        }
+        cells.push(cell.trim());
+        return cells;
+      }
+
+      function jalaliToIsoDate(value) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value) && !value.startsWith("14")) return value;
+        const [jy, jm, jd] = value.split("-").map(Number);
+        const formatter = new Intl.DateTimeFormat("en-CA-u-ca-persian", { year: "numeric", month: "2-digit", day: "2-digit" });
+        for (let gy = 2020; gy <= 2035; gy += 1) {
+          for (let month = 0; month < 12; month += 1) {
+            for (let day = 1; day <= 31; day += 1) {
+              const date = new Date(Date.UTC(gy, month, day));
+              if (date.getUTCMonth() !== month) continue;
+              const parts = Object.fromEntries(formatter.formatToParts(date).filter((part) => part.type !== "literal").map((part) => [part.type, Number(part.value)]));
+              if (parts.year === jy && parts.month === jm && parts.day === jd) {
+                return `${gy}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              }
+            }
+          }
+        }
+        throw new Error(`Invalid Jalali date: ${value}`);
+      }
+
+      async function loadReferenceData() {
+        const [businessUnits, departments, teams, profileRows] = await Promise.all([
+          supabaseFetch("/rest/v1/business_units?select=id,name"),
+          supabaseFetch("/rest/v1/departments?select=id,name,business_unit_id"),
+          supabaseFetch("/rest/v1/teams?select=id,name,department_id"),
+          supabaseFetch("/rest/v1/profiles?select=id,email,employee_id,display_name"),
+        ]);
+        orgUnits = { businessUnits, departments, teams };
+        profiles = profileRows;
+      }
+
+      function validateRows(rawRows) {
+        const existingEmails = new Set(profiles.map((profile) => profile.email.toLowerCase()));
+        const existingEmployeeIds = new Set(profiles.map((profile) => profile.employee_id).filter(Boolean));
+        const seenEmails = new Set();
+        const seenEmployeeIds = new Set();
+        const managerByEmail = new Map(profiles.map((profile) => [profile.email.toLowerCase(), profile.id]));
+        const validated = rawRows.map((row, index) => {
+          const errors = [];
+          const email = String(row.email || "").toLowerCase();
+          const employeeId = String(row.employeeId || "");
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errors.push("Invalid email");
+          if (!employeeId) errors.push("Missing employee ID");
+          if (!row.fullNameEnglish) errors.push("Missing English name");
+          if (!row.fullNamePersian) errors.push("Missing Persian name");
+          if (existingEmails.has(email)) errors.push("Email already exists");
+          if (existingEmployeeIds.has(employeeId)) errors.push("Employee ID already exists");
+          if (seenEmails.has(email)) errors.push("Duplicate email in import");
+          if (seenEmployeeIds.has(employeeId)) errors.push("Duplicate employee ID in import");
+          seenEmails.add(email);
+          seenEmployeeIds.add(employeeId);
+          const businessUnit = orgUnits.businessUnits.find((item) => item.name === row.businessUnitName);
+          const department = orgUnits.departments.find((item) => item.name === row.departmentName && item.business_unit_id === businessUnit?.id);
+          const team = orgUnits.teams.find((item) => item.name === row.teamName && item.department_id === department?.id);
+          if (!businessUnit) errors.push("Unknown business unit");
+          if (!department) errors.push("Unknown department");
+          if (!team) errors.push("Unknown team");
+          let joinDate = "";
+          try {
+            joinDate = jalaliToIsoDate(row.joinDate);
+          } catch (error) {
+            errors.push(error.message);
+          }
+          const managerId = row.managerEmail ? managerByEmail.get(String(row.managerEmail).toLowerCase()) : null;
+          if (row.managerEmail && !managerId) errors.push("Manager email not found");
+          return {
+            rowNumber: index + 2,
+            raw: row,
+            normalized: {
+              ...row,
+              email,
+              joinDate,
+              businessUnitId: businessUnit?.id,
+              departmentId: department?.id,
+              teamId: team?.id,
+              managerId,
+            },
+            status: errors.length ? "invalid" : "valid",
+            errors,
+          };
+        });
+        return {
+          totalRows: validated.length,
+          validRows: validated.filter((row) => row.status === "valid").length,
+          invalidRows: validated.filter((row) => row.status === "invalid").length,
+          rows: validated,
+        };
+      }
+
+      function renderPreview(result) {
+        document.querySelector("#totalRows").textContent = result.totalRows;
+        document.querySelector("#validRows").textContent = result.validRows;
+        document.querySelector("#invalidRows").textContent = result.invalidRows;
+        document.querySelector("#statusLabel").textContent = result.invalidRows ? "Needs fixes" : "Ready";
+        document.querySelector("#countLabel").textContent = `${result.validRows} valid, ${result.invalidRows} invalid`;
+        rows.innerHTML = result.rows.map((row) => `
+          <tr>
+            <td>${row.rowNumber}</td>
+            <td>${row.raw.email || ""}</td>
+            <td>${row.raw.employeeId || ""}</td>
+            <td>${row.raw.fullNameEnglish || ""}</td>
+            <td>${row.raw.teamName || ""}</td>
+            <td><span class="pill ${row.status}">${row.status}</span></td>
+            <td>${row.errors.join("<br>")}</td>
+          </tr>
+        `).join("");
+      }
+
+      async function writeAudit(action, entityType, entityId, fromStatus, toStatus, metadata) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            action,
+            entity_type: entityType,
+            entity_id: entityId,
+            from_status: fromStatus,
+            to_status: toStatus,
+            metadata,
+          }),
+        });
+      }
+
+      async function processImport() {
+        const sourceFilename = document.querySelector("#sourceFilename").value || "employee-import.csv";
+        if (!preview) preview = validateRows(parseCsv(document.querySelector("#csvInput").value));
+        renderPreview(preview);
+        const runStatus = preview.invalidRows ? "failed_validation" : "processing";
+        const runId = crypto.randomUUID();
+        await supabaseFetch("/rest/v1/employee_import_runs", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            id: runId,
+            source_filename: sourceFilename,
+            status: runStatus,
+            owner_role: preview.invalidRows ? "HR_ADMIN" : "SYSTEM",
+            next_action: preview.invalidRows ? "fix_rows" : null,
+            total_rows: preview.totalRows,
+            valid_rows: preview.validRows,
+            invalid_rows: preview.invalidRows,
+            created_by: currentUser.id,
+            started_at: new Date().toISOString(),
+          }),
+        });
+        await supabaseFetch("/rest/v1/employee_import_rows", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(preview.rows.map((row) => ({
+            import_run_id: runId,
+            row_number: row.rowNumber,
+            raw_data: row.raw,
+            normalized_data: row.normalized,
+            status: row.status,
+            errors: row.errors,
+          }))),
+        });
+        await writeAudit("employee_import.status_changed", "employee_import_run", runId, null, runStatus, {
+          owner: preview.invalidRows ? "HR_ADMIN" : "SYSTEM",
+          nextAction: preview.invalidRows ? "fix_rows" : null,
+          totalRows: preview.totalRows,
+          validRows: preview.validRows,
+          invalidRows: preview.invalidRows,
+        });
+        if (preview.invalidRows) {
+          showMessage("Import has validation errors. Fix the rows before creating employees.", "error");
+          await loadRuns();
+          return;
+        }
+        let createdCount = 0;
+        let errorCount = 0;
+        for (const row of preview.rows) {
+          try {
+            const password = crypto.randomUUID();
+            const signup = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+              method: "POST",
+              headers: { apikey: publishableKey, "Content-Type": "application/json" },
+              body: JSON.stringify({ email: row.normalized.email, password, data: { display_name: row.normalized.fullNameEnglish } }),
+            }).then(async (response) => {
+              const body = await response.json();
+              if (!response.ok) throw new Error(body.msg || body.message || "Could not create Auth user");
+              return body;
+            });
+            const profileId = signup.user?.id || signup.id;
+            await supabaseFetch("/rest/v1/profiles", {
+              method: "POST",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({
+                id: profileId,
+                email: row.normalized.email,
+                employee_id: row.normalized.employeeId,
+                display_name: row.normalized.fullNameEnglish,
+                full_name_english: row.normalized.fullNameEnglish,
+                full_name_persian: row.normalized.fullNamePersian,
+                username: row.normalized.email.split("@")[0],
+                join_date: row.normalized.joinDate,
+                business_unit_id: row.normalized.businessUnitId,
+                department_id: row.normalized.departmentId,
+                team_id: row.normalized.teamId,
+                manager_id: row.normalized.managerId,
+                level: row.normalized.level,
+                position_title: row.normalized.positionTitle,
+                phone: row.normalized.phone || null,
+                role_code: "EMPLOYEE",
+                account_status: "active",
+                preferred_calendar: "jalali",
+                preferred_locale: "fa-IR",
+                date_display_timezone: "Asia/Tehran",
+              }),
+            });
+            await supabaseFetch(`/rest/v1/employee_import_rows?import_run_id=eq.${runId}&row_number=eq.${row.rowNumber}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({ status: "created", profile_id: profileId }),
+            });
+            await writeAudit("profile.created_from_bulk_import", "profile", profileId, null, "active", {
+              owner: "EMPLOYEE",
+              nextAction: null,
+              employeeId: row.normalized.employeeId,
+            });
+            createdCount += 1;
+          } catch (error) {
+            errorCount += 1;
+            await supabaseFetch(`/rest/v1/employee_import_rows?import_run_id=eq.${runId}&row_number=eq.${row.rowNumber}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({ status: "error", errors: [error.message] }),
+            });
+          }
+        }
+        const finalStatus = errorCount ? "completed_with_errors" : "completed";
+        await supabaseFetch(`/rest/v1/employee_import_runs?id=eq.${runId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            status: finalStatus,
+            owner_role: errorCount ? "HR_ADMIN" : "SYSTEM",
+            next_action: errorCount ? "fix_rows" : null,
+            created_count: createdCount,
+            error_count: errorCount,
+            completed_at: new Date().toISOString(),
+          }),
+        });
+        await writeAudit("employee_import.status_changed", "employee_import_run", runId, "processing", finalStatus, {
+          owner: errorCount ? "HR_ADMIN" : "SYSTEM",
+          nextAction: errorCount ? "fix_rows" : null,
+          createdCount,
+          errorCount,
+        });
+        showMessage(`Import finished. Created ${createdCount}; errors ${errorCount}.`, errorCount ? "error" : "success");
+        await loadReferenceData();
+        await loadRuns();
+      }
+
+      async function loadRuns() {
+        const runs = await supabaseFetch("/rest/v1/employee_import_runs?select=*&order=created_at.desc&limit=10");
+        document.querySelector("#runCount").textContent = `${runs.length} recent run${runs.length === 1 ? "" : "s"}`;
+        runRows.innerHTML = runs.map((run) => `
+          <tr>
+            <td>${run.source_filename}</td>
+            <td><span class="pill ${run.status.includes("error") || run.status.includes("failed") ? "error" : ""}">${run.status}</span></td>
+            <td>${run.total_rows}</td>
+            <td>${run.created_count}</td>
+            <td>${run.error_count + run.invalid_rows}</td>
+            <td>${new Date(run.created_at).toLocaleString()}</td>
+          </tr>
+        `).join("");
+      }
+
+      document.querySelector("#previewButton").addEventListener("click", () => {
+        try {
+          preview = validateRows(parseCsv(document.querySelector("#csvInput").value));
+          renderPreview(preview);
+          showMessage(preview.invalidRows ? "Some rows need fixes." : "Rows are ready to import.", preview.invalidRows ? "error" : "success");
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+      document.querySelector("#processButton").addEventListener("click", () => processImport().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#refreshRunsButton").addEventListener("click", () => loadRuns().catch((error) => showMessage(error.message, "error")));
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadReferenceData();
+          await loadRuns();
+        } catch (error) {
+          showMessage(error.message, "error");
+          document.querySelector("#runCount").textContent = "Could not load import runs";
+        }
+      })();
+    </script>
+  </body>
+</html>

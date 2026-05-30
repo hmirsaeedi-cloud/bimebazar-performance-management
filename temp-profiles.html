@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Employee Profiles</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --danger: #b13d3a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 28px 18px 48px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: clamp(1.8rem, 4vw, 3rem);
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      section {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(150px, 1fr));
+        gap: 12px;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 750;
+      }
+
+      input,
+      select {
+        height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 10px;
+        color: var(--ink);
+        font: inherit;
+      }
+
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+
+      button.secondary {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: end;
+        justify-content: space-between;
+        margin: 18px 0;
+      }
+
+      .message {
+        display: none;
+        margin-top: 12px;
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .message.error {
+        display: block;
+        border: 1px solid #efb3ad;
+        background: #fff0ee;
+        color: var(--danger);
+      }
+
+      .message.success {
+        display: block;
+        border: 1px solid #b8dfc2;
+        background: #eefaf1;
+        color: #245f37;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 11px 8px;
+        text-align: left;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #e8f4f2;
+        color: #075b5b;
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+
+      @media (max-width: 860px) {
+        header,
+        .toolbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        table {
+          display: block;
+          overflow-x: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Employee Profiles</h1>
+          <p>Temporary local HR Admin screen for manual profile creation.</p>
+        </div>
+        <nav>
+          <a href="/temp-login.html">Login page</a>
+          <a href="/temp-form-builder.html" style="margin-left: 12px">Form builder</a>
+          <a href="/temp-bulk-import.html" style="margin-left: 12px">Bulk import</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Create Profile</h2>
+        <form id="profileForm" class="grid">
+          <label>Email<input id="email" type="email" required /></label>
+          <label>Employee ID<input id="employeeId" required /></label>
+          <label>English Name<input id="fullNameEnglish" required /></label>
+          <label>Persian Name<input id="fullNamePersian" required /></label>
+          <label>Join Date (Jalali)<input id="joinDate" placeholder="1403-01-01" required /></label>
+          <label>Level<input id="level" value="L1" required /></label>
+          <label>Position Title<input id="positionTitle" required /></label>
+          <label>Phone<input id="phone" /></label>
+          <label>Business Unit<select id="businessUnitId" required></select></label>
+          <label>Department<select id="departmentId" required></select></label>
+          <label>Team<select id="teamId" required></select></label>
+          <label>Manager<select id="managerId"></select></label>
+          <button type="submit">Create employee</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh list</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section style="margin-top: 18px">
+        <div class="toolbar">
+          <div>
+            <h2>Profiles</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+          <label>Search<input id="search" placeholder="Name, email, employee ID" /></label>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Employee ID</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Level</th>
+              <th>Join Date</th>
+              <th>Title</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let orgUnits = { businessUnits: [], departments: [], teams: [] };
+
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+
+      const jalaliBreaks = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178];
+      const div = (a, b) => ~~(a / b);
+      const mod = (a, b) => a - ~~(a / b) * b;
+      const pad2 = (value) => String(value).padStart(2, "0");
+
+      function jalCal(jy) {
+        let leapJ = -14;
+        let jp = jalaliBreaks[0];
+        let jm = 0;
+        let jump = 0;
+        if (jy < jp || jy >= jalaliBreaks[jalaliBreaks.length - 1]) throw new Error("Jalali year is out of supported range");
+        for (let i = 1; i < jalaliBreaks.length; i += 1) {
+          jm = jalaliBreaks[i];
+          jump = jm - jp;
+          if (jy < jm) break;
+          leapJ += div(jump, 33) * 8 + div(mod(jump, 33), 4);
+          jp = jm;
+        }
+        let n = jy - jp;
+        leapJ += div(n, 33) * 8 + div(mod(n, 33) + 3, 4);
+        if (mod(jump, 33) === 4 && jump - n === 4) leapJ += 1;
+        const gy = jy + 621;
+        const leapG = div(gy, 4) - div((div(gy, 100) + 1) * 3, 4) - 150;
+        const march = 20 + leapJ - leapG;
+        if (jump - n < 6) n = n - jump + div(jump + 4, 33) * 33;
+        let leap = mod(mod(n + 1, 33) - 1, 4);
+        if (leap === -1) leap = 4;
+        return { leap, gy, march };
+      }
+
+      function g2d(gy, gm, gd) {
+        let d = div((gy + div(gm - 8, 6) + 100100) * 1461, 4) + div(153 * mod(gm + 9, 12) + 2, 5) + gd - 34840408;
+        return d - div(div(gy + 100100 + div(gm - 8, 6), 100) * 3, 4) + 752;
+      }
+
+      function d2g(jdn) {
+        let j = 4 * jdn + 139361631;
+        j = j + div(div(4 * jdn + 183187720, 146097) * 3, 4) * 4 - 3908;
+        const i = div(mod(j, 1461), 4) * 5 + 308;
+        const gd = div(mod(i, 153), 5) + 1;
+        const gm = mod(div(i, 153), 12) + 1;
+        const gy = div(j, 1461) - 100100 + div(8 - gm, 6);
+        return { gy, gm, gd };
+      }
+
+      function j2d(jy, jm, jd) {
+        const r = jalCal(jy);
+        return g2d(r.gy, 3, r.march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1;
+      }
+
+      function d2j(jdn) {
+        const gy = d2g(jdn).gy;
+        let jy = gy - 621;
+        const r = jalCal(jy);
+        const jdn1f = g2d(gy, 3, r.march);
+        let k = jdn - jdn1f;
+        if (k >= 0) {
+          if (k <= 185) return { jy, jm: 1 + div(k, 31), jd: mod(k, 31) + 1 };
+          k -= 186;
+        } else {
+          jy -= 1;
+          k += 179;
+          if (r.leap === 1) k += 1;
+        }
+        return { jy, jm: 7 + div(k, 30), jd: mod(k, 30) + 1 };
+      }
+
+      function jalaliToIsoDate(value) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+        if (!match) throw new Error("Join date must look like 1403-01-01");
+        const jy = Number(match[1]);
+        const jm = Number(match[2]);
+        const jd = Number(match[3]);
+        const maxDay = jm <= 6 ? 31 : jm <= 11 ? 30 : jalCal(jy).leap === 0 ? 30 : 29;
+        if (jm < 1 || jm > 12 || jd < 1 || jd > maxDay) throw new Error("Join date is not a valid Jalali date");
+        const g = d2g(j2d(jy, jm, jd));
+        return `${g.gy}-${pad2(g.gm)}-${pad2(g.gd)}`;
+      }
+
+      function isoDateToJalali(value) {
+        if (!value) return "";
+        const [gy, gm, gd] = value.split("-").map(Number);
+        const j = d2j(g2d(gy, gm, gd));
+        return `${j.jy}-${pad2(j.jm)}-${pad2(j.jd)}`;
+      }
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) {
+          throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        }
+        return data;
+      }
+
+      async function ensureToken() {
+        if (accessToken) return;
+        const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+        const password = prompt("Enter your password");
+        const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+          method: "POST",
+          headers: { apikey: publishableKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }).then(async (response) => {
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.msg || "Login failed");
+          return body;
+        });
+        accessToken = data.access_token;
+        localStorage.setItem("bb_access_token", accessToken);
+      }
+
+      function fillSelect(select, options, label, valueKey = "id") {
+        select.innerHTML = `<option value="">${label}</option>` + options.map((item) => `<option value="${item[valueKey]}">${item.name || item.display_name || item.email}</option>`).join("");
+      }
+
+      async function loadOrgUnits() {
+        const [businessUnits, departments, teams] = await Promise.all([
+          supabaseFetch("/rest/v1/business_units?select=id,name&order=name"),
+          supabaseFetch("/rest/v1/departments?select=id,name,business_unit_id&order=name"),
+          supabaseFetch("/rest/v1/teams?select=id,name,department_id&order=name"),
+        ]);
+        orgUnits = { businessUnits, departments, teams };
+        fillSelect(document.querySelector("#businessUnitId"), businessUnits, "Select BU");
+        fillSelect(document.querySelector("#departmentId"), departments, "Select department");
+        fillSelect(document.querySelector("#teamId"), teams, "Select team");
+      }
+
+      async function loadProfiles() {
+        const search = document.querySelector("#search").value.trim();
+        const query = search
+          ? `or=(email.ilike.*${encodeURIComponent(search)}*,employee_id.ilike.*${encodeURIComponent(search)}*,display_name.ilike.*${encodeURIComponent(search)}*)`
+          : "order=employee_id";
+        const profiles = await supabaseFetch(`/rest/v1/profiles?select=id,email,display_name,employee_id,level,join_date,position_title,account_status&${query}`);
+        countLabel.textContent = `${profiles.length} profile${profiles.length === 1 ? "" : "s"}`;
+        fillSelect(document.querySelector("#managerId"), profiles, "No manager");
+        rows.innerHTML = profiles.map((profile) => `
+          <tr>
+            <td>${profile.employee_id || ""}</td>
+            <td>${profile.display_name || ""}</td>
+            <td>${profile.email || ""}</td>
+            <td>${profile.level || ""}</td>
+            <td>${isoDateToJalali(profile.join_date)}</td>
+            <td>${profile.position_title || ""}</td>
+            <td><span class="pill">${profile.account_status}</span></td>
+          </tr>
+        `).join("");
+      }
+
+      document.querySelector("#profileForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const payload = {
+            email: document.querySelector("#email").value,
+            employee_id: document.querySelector("#employeeId").value,
+            display_name: document.querySelector("#fullNameEnglish").value,
+            full_name_english: document.querySelector("#fullNameEnglish").value,
+            full_name_persian: document.querySelector("#fullNamePersian").value,
+            username: document.querySelector("#email").value.split("@")[0],
+            join_date: jalaliToIsoDate(document.querySelector("#joinDate").value),
+            level: document.querySelector("#level").value,
+            position_title: document.querySelector("#positionTitle").value,
+            phone: document.querySelector("#phone").value || null,
+            business_unit_id: document.querySelector("#businessUnitId").value,
+            department_id: document.querySelector("#departmentId").value,
+            team_id: document.querySelector("#teamId").value,
+            manager_id: document.querySelector("#managerId").value || null,
+            role_code: "EMPLOYEE",
+            account_status: "active",
+            preferred_calendar: "jalali",
+            preferred_locale: "fa-IR",
+            date_display_timezone: "Asia/Tehran",
+          };
+          const temporaryPassword = crypto.randomUUID();
+          const signup = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: payload.email,
+              password: temporaryPassword,
+              data: { display_name: payload.display_name },
+            }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || body.message || "Could not create Auth user");
+            return body;
+          });
+
+          payload.id = signup.user?.id || signup.id;
+          if (!payload.id) throw new Error("Auth user was created but no user id was returned");
+          await supabaseFetch("/rest/v1/profiles", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify(payload),
+          });
+          showMessage(`Profile created. Temporary password: ${temporaryPassword}`, "success");
+          event.target.reset();
+          await loadProfiles();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      document.querySelector("#refreshButton").addEventListener("click", loadProfiles);
+      document.querySelector("#search").addEventListener("input", () => loadProfiles().catch(console.error));
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadOrgUnits();
+          await loadProfiles();
+        } catch (error) {
+          showMessage(error.message, "error");
+          countLabel.textContent = "Could not load profiles";
+        }
+      })();
+    </script>
+  </body>
+</html>

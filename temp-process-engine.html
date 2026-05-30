@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Process Engine</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --gold: #c48922;
+        --danger: #b13d3a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { max-width: 1180px; margin: 0 auto; padding: 28px 18px 48px; }
+      header, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; }
+      p { margin: 0; color: var(--muted); }
+      section {
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      }
+      .grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 750;
+      }
+      input, select, textarea {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        color: var(--ink);
+        font: inherit;
+      }
+      textarea { min-height: 96px; resize: vertical; }
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+      button.warning { background: var(--gold); }
+      button.danger { background: var(--danger); }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 0.78rem; }
+      .pill {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #e8f4f2;
+        color: #075b5b;
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      @media (max-width: 860px) {
+        header, .toolbar { align-items: stretch; flex-direction: column; }
+        .grid { grid-template-columns: 1fr; }
+        table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Process Engine</h1>
+          <p>Temporary HR Admin screen for creating and configuring performance processes.</p>
+        </div>
+        <nav>
+          <a href="/temp-form-builder.html">Forms</a>
+          <a href="/temp-bulk-import.html" style="margin-left: 12px">Bulk import</a>
+          <a href="/temp-mpa.html" style="margin-left: 12px">MPA</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Create Process</h2>
+        <form id="processForm" class="grid">
+          <label>Name<input id="name" value="Self-assessment process" required /></label>
+          <label>Type
+            <select id="processType">
+              <option value="self_assessment">Self-assessment</option>
+              <option value="downward_evaluation">Downward evaluation</option>
+              <option value="upward_feedback">Upward feedback</option>
+              <option value="survey">Survey</option>
+              <option value="end_cycle">End-cycle</option>
+              <option value="mid_cycle">Mid-cycle</option>
+            </select>
+          </label>
+          <label>Form Template<select id="formTemplateId"></select></label>
+          <label>Team Filter<select id="teamId"></select></label>
+          <label>Starts At<input id="startsAt" type="datetime-local" /></label>
+          <label>Ends At<input id="endsAt" type="datetime-local" /></label>
+          <label>Description<input id="description" value="Configured process with explicit steps and eligibility filter." /></label>
+          <button type="submit">Create draft process</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Processes</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Owner</th>
+              <th>Next Action</th>
+              <th>Participants</th>
+              <th>Move</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let templates = [];
+      let teams = [];
+
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function fillSelect(select, options, label, render = (item) => item.name) {
+        select.innerHTML = `<option value="">${label}</option>` + options.map((item) => `<option value="${item.id}">${render(item)}</option>`).join("");
+      }
+
+      async function loadReferenceData() {
+        [templates, teams] = await Promise.all([
+          supabaseFetch("/rest/v1/form_templates?select=id,name,current_version_id,status&status=eq.published&order=name"),
+          supabaseFetch("/rest/v1/teams?select=id,name,department_id&order=name"),
+        ]);
+        fillSelect(document.querySelector("#formTemplateId"), templates, "No form template", (item) => `${item.name}`);
+        fillSelect(document.querySelector("#teamId"), teams, "All teams");
+      }
+
+      function isoDateTime(value) {
+        return value ? new Date(value).toISOString() : null;
+      }
+
+      async function writeAudit(action, entityId, fromStatus, toStatus, metadata, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            action,
+            entity_type: "performance_process",
+            entity_id: entityId,
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata,
+          }),
+        });
+      }
+
+      function nextState(status, action) {
+        const table = {
+          draft: { configure: ["configured", "HR_ADMIN", "schedule"], cancel: ["cancelled", "SYSTEM", null] },
+          configured: { schedule: ["scheduled", "SYSTEM", "start"], start: ["active", "HRBP", "complete"], cancel: ["cancelled", "SYSTEM", null] },
+          scheduled: { start: ["active", "HRBP", "complete"], cancel: ["cancelled", "SYSTEM", null] },
+          active: { pause: ["paused", "HRBP", "resume"], complete: ["completed", "SYSTEM", null], cancel: ["cancelled", "SYSTEM", null] },
+          paused: { resume: ["active", "HRBP", "complete"], cancel: ["cancelled", "SYSTEM", null] },
+        };
+        return table[status]?.[action];
+      }
+
+      async function configureProcess(process) {
+        const filter = process.eligibility_filter || {};
+        let query = "/rest/v1/profiles?select=id,manager_id,team_id,level&account_status=eq.active";
+        if (filter.teamIds?.length) query += `&team_id=in.(${filter.teamIds.join(",")})`;
+        const participants = await supabaseFetch(query);
+        if (!participants.length) throw new Error("Processes cannot start when org filters produce zero eligible employees");
+        await supabaseFetch(`/rest/v1/process_participants?process_id=eq.${process.id}`, {
+          method: "DELETE",
+          headers: { Prefer: "return=minimal" },
+        });
+        await supabaseFetch("/rest/v1/process_participants", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(participants.map((participant) => ({
+            process_id: process.id,
+            employee_id: participant.id,
+            manager_id: participant.manager_id,
+            status: "eligible",
+            metadata: { teamId: participant.team_id, level: participant.level },
+          }))),
+        });
+        await moveProcess(process.id, "configure", { participantCount: participants.length });
+      }
+
+      async function moveProcess(id, action, extraMetadata = {}) {
+        const [current] = await supabaseFetch(`/rest/v1/performance_processes?id=eq.${id}&select=*`);
+        const next = nextState(current.status, action);
+        if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
+        await supabaseFetch(`/rest/v1/performance_processes?id=eq.${id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            status: next[0],
+            owner_role: next[1],
+            next_action: next[2],
+            updated_by: currentUser.id,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+        await writeAudit(`process.${action}`, id, current.status, next[0], {
+          owner: next[1],
+          nextAction: next[2],
+          ...extraMetadata,
+        });
+        showMessage(`Process moved to ${next[0]}.`, "success");
+        await loadProcesses();
+      }
+
+      async function loadProcesses() {
+        const processes = await supabaseFetch("/rest/v1/performance_processes?select=*,process_participants(id)&order=created_at.desc");
+        countLabel.textContent = `${processes.length} process${processes.length === 1 ? "" : "es"}`;
+        rows.innerHTML = processes.map((process) => `
+          <tr>
+            <td>${process.name}</td>
+            <td>${process.process_type}</td>
+            <td><span class="pill">${process.status}</span></td>
+            <td>${process.owner_role}</td>
+            <td>${process.next_action || ""}</td>
+            <td>${process.process_participants?.length || 0}</td>
+            <td class="actions">${renderActions(process)}</td>
+          </tr>
+        `).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            try {
+              const [process] = await supabaseFetch(`/rest/v1/performance_processes?id=eq.${button.dataset.id}&select=*`);
+              if (button.dataset.action === "configure") await configureProcess(process);
+              else await moveProcess(button.dataset.id, button.dataset.action);
+            } catch (error) {
+              showMessage(error.message, "error");
+            }
+          });
+        });
+      }
+
+      function renderActions(process) {
+        const actions = {
+          draft: [["configure", "Configure"], ["cancel", "Cancel"]],
+          configured: [["schedule", "Schedule"], ["start", "Start"], ["cancel", "Cancel"]],
+          scheduled: [["start", "Start"], ["cancel", "Cancel"]],
+          active: [["pause", "Pause"], ["complete", "Complete"], ["cancel", "Cancel"]],
+          paused: [["resume", "Resume"], ["cancel", "Cancel"]],
+        }[process.status] || [];
+        return actions.map(([action, label]) => `<button data-id="${process.id}" data-action="${action}" class="${action === "cancel" ? "danger" : action === "pause" ? "warning" : ""}">${label}</button>`).join("");
+      }
+
+      document.querySelector("#processForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const templateId = document.querySelector("#formTemplateId").value || null;
+          const template = templates.find((item) => item.id === templateId);
+          const teamId = document.querySelector("#teamId").value;
+          const config = {
+            formTemplateId: templateId,
+            formTemplateVersionId: template?.current_version_id || null,
+            eligibilityFilter: {
+              businessUnitIds: [],
+              departmentIds: [],
+              teamIds: teamId ? [teamId] : [],
+              levels: [],
+              includeEmployees: [],
+              excludeEmployees: [],
+            },
+            steps: [
+              { id: "self", ownerRole: "EMPLOYEE", action: "submit_self_assessment", dueInDays: 7 },
+              { id: "manager", ownerRole: "MANAGER", action: "review_employee_submission", dueInDays: 7 },
+            ],
+            visibility: {
+              employeeCanSeeManagerFeedbackBeforeSubmit: false,
+              managerCanSeeScoresBeforeSubmit: false,
+            },
+          };
+          const id = crypto.randomUUID();
+          await supabaseFetch("/rest/v1/performance_processes", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              id,
+              name: document.querySelector("#name").value,
+              description: document.querySelector("#description").value || null,
+              process_type: document.querySelector("#processType").value,
+              status: "draft",
+              owner_role: "HR_ADMIN",
+              next_action: "configure",
+              config,
+              eligibility_filter: config.eligibilityFilter,
+              form_template_id: config.formTemplateId,
+              form_template_version_id: config.formTemplateVersionId,
+              starts_at: isoDateTime(document.querySelector("#startsAt").value),
+              ends_at: isoDateTime(document.querySelector("#endsAt").value),
+              created_by: currentUser.id,
+              updated_by: currentUser.id,
+            }),
+          });
+          await writeAudit("process.created", id, null, "draft", {
+            owner: "HR_ADMIN",
+            nextAction: "configure",
+            processType: document.querySelector("#processType").value,
+          });
+          showMessage("Draft process created.", "success");
+          await loadProcesses();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      document.querySelector("#refreshButton").addEventListener("click", () => loadProcesses().catch((error) => showMessage(error.message, "error")));
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadReferenceData();
+          await loadProcesses();
+        } catch (error) {
+          showMessage(error.message, "error");
+          countLabel.textContent = "Could not load processes";
+        }
+      })();
+    </script>
+  </body>
+</html>

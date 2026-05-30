@@ -1,0 +1,12 @@
+{
+  "name": "@bimebazar/process-engine-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/processEngineWorkflow.d.ts",
+      "default": "./src/processEngineWorkflow.mjs"
+    }
+  }
+}

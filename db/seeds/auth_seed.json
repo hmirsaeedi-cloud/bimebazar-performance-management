@@ -1,0 +1,40 @@
+{
+  "roles": [
+    { "code": "EMPLOYEE", "label": "Employee" },
+    { "code": "MANAGER", "label": "Manager" },
+    { "code": "NEXT_LEVEL_MANAGER", "label": "Next Level Manager" },
+    { "code": "HRBP", "label": "HR Business Partner" },
+    { "code": "HR_ADMIN", "label": "HR Admin" }
+  ],
+  "permissions": [
+    { "code": "auth.login", "description": "Log in to the platform" },
+    { "code": "auth.logout", "description": "Log out from the platform" },
+    { "code": "auth.me", "description": "Read current user session" },
+    { "code": "auth.create_user", "description": "Create platform users" },
+    { "code": "auth.deactivate_user", "description": "Deactivate platform users" }
+  ],
+  "rolePermissions": {
+    "EMPLOYEE": ["auth.login", "auth.logout", "auth.me"],
+    "MANAGER": ["auth.login", "auth.logout", "auth.me"],
+    "NEXT_LEVEL_MANAGER": ["auth.login", "auth.logout", "auth.me"],
+    "HRBP": ["auth.login", "auth.logout", "auth.me"],
+    "HR_ADMIN": [
+      "auth.login",
+      "auth.logout",
+      "auth.me",
+      "auth.create_user",
+      "auth.deactivate_user"
+    ]
+  },
+  "users": [
+    {
+      "email": "hr.admin@bimebazar.local",
+      "displayName": "HR Admin",
+      "employeeId": "BB-0001",
+      "role": "HR_ADMIN",
+      "status": "active",
+      "password": "ChangeMe!2026",
+      "supabaseNote": "Create this user through Supabase Auth Admin, then insert/update public.profiles with the returned auth.users.id."
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "computedRole": "MANAGER",
+  "assignmentType": "computed",
+  "rule": "A user receives computed MANAGER when they have at least one active direct report.",
+  "manualOverride": "Manual MANAGER assignments are not revoked by the computed-role sync."
+}

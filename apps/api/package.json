@@ -1,0 +1,36 @@
+{
+  "name": "@bimebazar/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bimebazar/auth-workflow": "0.1.0",
+    "@bimebazar/bulk-import-workflow": "0.1.0",
+    "@bimebazar/calendar-utils": "0.1.0",
+    "@bimebazar/form-builder-workflow": "0.1.0",
+    "@bimebazar/manager-role-workflow": "0.1.0",
+    "@bimebazar/mpa-workflow": "0.1.0",
+    "@bimebazar/process-engine-workflow": "0.1.0",
+    "@bimebazar/profile-workflow": "0.1.0",
+    "@bimebazar/rbac-workflow": "0.1.0",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.75.1",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "express": "^4.18.3",
+    "helmet": "^7.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.7",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.30",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3"
+  }
+}
