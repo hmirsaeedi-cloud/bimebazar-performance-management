@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Employee Export</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --danger: #b13d3a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { max-width: 1040px; margin: 0 auto; padding: 28px 18px 48px; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      p { margin: 0; color: var(--muted); }
+      section {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      }
+      .grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+      label { display: grid; gap: 6px; color: var(--muted); font-size: 0.8rem; font-weight: 750; }
+      input, select {
+        height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 10px;
+        color: var(--ink);
+        font: inherit;
+      }
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      pre { overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #fbfdfd; }
+      @media (max-width: 760px) {
+        header { align-items: stretch; flex-direction: column; }
+        .grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Employee Export</h1>
+          <p>Generate a filtered CSV report from employee profiles.</p>
+        </div>
+        <nav>
+          <a href="/temp-profiles.html">Profiles</a>
+          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Report Filters</h2>
+        <form id="exportForm" class="grid">
+          <label>Search<input id="search" placeholder="Name, email, ID" /></label>
+          <label>Status
+            <select id="status">
+              <option value="">Any</option>
+              <option value="active">Active</option>
+              <option value="invited">Invited</option>
+              <option value="locked">Locked</option>
+              <option value="deactivated">Deactivated</option>
+            </select>
+          </label>
+          <label>Level<input id="level" placeholder="L1" /></label>
+          <label>Team<select id="teamId"></select></label>
+          <button type="submit">Download CSV</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section style="margin-top: 18px">
+        <h2>Last Export</h2>
+        <pre id="summary">No export yet.</pre>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+
+      const columns = [
+        "employee_id",
+        "email",
+        "full_name_english",
+        "full_name_persian",
+        "role_code",
+        "account_status",
+        "join_date",
+        "level",
+        "position_title",
+      ];
+
+      function showMessage(text, type) {
+        const message = document.querySelector("#message");
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function toCsv(rows) {
+        const escape = (value) => {
+          const text = value == null ? "" : String(value);
+          return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+        };
+        return [columns.join(","), ...rows.map((row) => columns.map((column) => escape(row[column])).join(","))].join("\n");
+      }
+
+      function downloadCsv(filename, csv) {
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      async function writeAudit(action, reportId, fromStatus, toStatus, metadata) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            action,
+            entity_type: "employee_export_report",
+            entity_id: reportId,
+            from_status: fromStatus,
+            to_status: toStatus,
+            metadata,
+          }),
+        });
+      }
+
+      async function loadTeams() {
+        const teams = await supabaseFetch("/rest/v1/teams?select=id,name&order=name");
+        document.querySelector("#teamId").innerHTML = `<option value="">Any</option>` + teams.map((team) => `<option value="${team.id}">${team.name}</option>`).join("");
+      }
+
+      document.querySelector("#exportForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const filters = {
+            search: document.querySelector("#search").value.trim() || null,
+            status: document.querySelector("#status").value || null,
+            level: document.querySelector("#level").value.trim() || null,
+            teamId: document.querySelector("#teamId").value || null,
+          };
+          const params = new URLSearchParams({ select: columns.join(","), order: "employee_id" });
+          if (filters.search) params.set("or", `(email.ilike.*${filters.search}*,employee_id.ilike.*${filters.search}*,display_name.ilike.*${filters.search}*)`);
+          if (filters.status) params.set("account_status", `eq.${filters.status}`);
+          if (filters.level) params.set("level", `eq.${filters.level}`);
+          if (filters.teamId) params.set("team_id", `eq.${filters.teamId}`);
+          const rows = await supabaseFetch(`/rest/v1/profiles?${params.toString()}`);
+          const filename = `employee-export-${new Date().toISOString().slice(0, 10)}.csv`;
+          const reportId = crypto.randomUUID();
+          await supabaseFetch("/rest/v1/employee_export_reports", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              id: reportId,
+              status: "ready",
+              owner_role: "HR_ADMIN",
+              next_action: null,
+              filters,
+              columns,
+              row_count: rows.length,
+              file_name: filename,
+              requested_by: currentUser.id,
+              generated_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            }),
+          });
+          await writeAudit("profile_export.requested", reportId, null, "requested", { owner: "HR_ADMIN", nextAction: "generate", filters, columns });
+          await writeAudit("profile_export.generated", reportId, "generating", "ready", { owner: "HR_ADMIN", nextAction: null, rowCount: rows.length, fileName: filename });
+          downloadCsv(filename, toCsv(rows));
+          document.querySelector("#summary").textContent = JSON.stringify({ reportId, filename, rowCount: rows.length, filters }, null, 2);
+          showMessage(`Export ready. ${rows.length} rows downloaded.`, "success");
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadTeams();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      })();
+    </script>
+  </body>
+</html>

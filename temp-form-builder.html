@@ -226,6 +226,16 @@
       </section>
 
       <section>
+        <h2>Starter Templates</h2>
+        <div class="grid">
+          <button type="button" data-preset="self_assessment_default">Clone self-assessment</button>
+          <button type="button" data-preset="manager_evaluation_default">Clone manager evaluation</button>
+          <button type="button" data-preset="upward_feedback_default">Clone upward feedback</button>
+          <button type="button" data-preset="pulse_survey_default">Clone pulse survey</button>
+        </div>
+      </section>
+
+      <section>
         <div class="toolbar">
           <div>
             <h2>Templates</h2>
@@ -339,6 +349,13 @@
                     { id: "opt-priority", label: "Priority clarity", value: "priority_clarity" },
                   ],
                 },
+                {
+                  id: "q-follow-up",
+                  type: "long_text",
+                  label: "Support details",
+                  required: false,
+                  visibility: [{ sourceQuestionId: "q-multi", operator: "contains", value: "coaching" }],
+                },
               ],
             },
             {
@@ -347,7 +364,14 @@
               questions: [
                 { id: "q-date", type: "date", label: "Target completion date", required: false },
                 { id: "q-boolean", type: "boolean", label: "Ready for calibration", required: true },
-                { id: "q-file", type: "file", label: "Evidence attachment", required: false },
+                {
+                  id: "q-file",
+                  type: "file",
+                  label: "Evidence attachment",
+                  required: false,
+                  allowedMimeTypes: ["application/pdf", "image/png", "image/jpeg"],
+                  maxFileSizeMb: 20,
+                },
                 { id: "q-employee", type: "employee_reference", label: "Feedback provider", required: false },
                 { id: "q-heading", type: "section_heading", label: "Private HR notes", required: false },
               ],
@@ -355,6 +379,89 @@
           ],
         };
       }
+
+      const presetTemplates = {
+        self_assessment_default: {
+          name: "Self-assessment default copy",
+          description: "Employee self-review covering achievements, strengths, support needs, and goals.",
+          module: "self_assessment",
+          schema: {
+            title: "Self-assessment",
+            sections: [
+              {
+                id: "reflection",
+                title: "Reflection",
+                questions: [
+                  { id: "achievements", type: "long_text", label: "What were your most important achievements?", required: true },
+                  { id: "strength", type: "single_select", label: "Primary strength this cycle", required: true, options: [
+                    { id: "execution", label: "Execution", value: "execution" },
+                    { id: "collaboration", label: "Collaboration", value: "collaboration" },
+                  ] },
+                  { id: "confidence", type: "scale", label: "Confidence in overall performance", required: true, min: 1, max: 5, weight: 20 },
+                ],
+              },
+            ],
+          },
+        },
+        manager_evaluation_default: {
+          name: "Manager evaluation default copy",
+          description: "Manager review template for performance, behavior, and growth recommendations.",
+          module: "manager_evaluation",
+          schema: {
+            title: "Manager evaluation",
+            sections: [
+              {
+                id: "performance",
+                title: "Performance",
+                questions: [
+                  { id: "overall_rating", type: "scale", label: "Overall performance rating", required: true, min: 1, max: 5, weight: 40 },
+                  { id: "impact_notes", type: "rich_text", label: "Impact notes", required: true },
+                  { id: "ready_for_promotion", type: "boolean", label: "Ready for promotion discussion?", required: true },
+                ],
+              },
+            ],
+          },
+        },
+        upward_feedback_default: {
+          name: "Upward feedback default copy",
+          description: "Employee feedback template for manager effectiveness and support.",
+          module: "upward_feedback",
+          schema: {
+            title: "Upward feedback",
+            sections: [
+              {
+                id: "manager_support",
+                title: "Manager support",
+                questions: [
+                  { id: "clarity", type: "scale", label: "My manager gives clear priorities", required: true, min: 1, max: 5 },
+                  { id: "comment", type: "long_text", label: "What should your manager continue or change?" },
+                ],
+              },
+            ],
+          },
+        },
+        pulse_survey_default: {
+          name: "Pulse survey default copy",
+          description: "Short engagement survey template for quick organizational sensing.",
+          module: "survey",
+          schema: {
+            title: "Pulse survey",
+            sections: [
+              {
+                id: "pulse",
+                title: "Pulse",
+                questions: [
+                  { id: "energy", type: "scale", label: "My energy level this month", required: true, min: 1, max: 5 },
+                  { id: "blockers", type: "multi_select", label: "Current blockers", options: [
+                    { id: "workload", label: "Workload", value: "workload" },
+                    { id: "alignment", label: "Alignment", value: "alignment" },
+                  ] },
+                ],
+              },
+            ],
+          },
+        },
+      };
 
       async function writeAuditEvent(action, entityId, fromStatus, toStatus, metadata, reason = null) {
         await supabaseFetch("/rest/v1/audit_events", {
@@ -375,19 +482,20 @@
 
       async function loadTemplates() {
         const templates = await supabaseFetch(
-          "/rest/v1/form_templates?select=id,name,module,status,current_version_id,form_template_versions(id,version_number,status)&order=updated_at.desc",
+          "/rest/v1/form_templates?select=id,name,module,status,current_version_id,template_category,is_system_template,form_template_versions(id,version_number,status)&order=updated_at.desc",
         );
         countLabel.textContent = `${templates.length} template${templates.length === 1 ? "" : "s"}`;
         rows.innerHTML = templates.map((template) => {
           const version = (template.form_template_versions || []).find((item) => item.id === template.current_version_id);
           return `
             <tr>
-              <td>${template.name}</td>
+              <td>${template.name}${template.is_system_template ? " · system" : ""}</td>
               <td>${template.module}</td>
               <td><span class="pill">${template.status}</span></td>
               <td>${version ? version.version_number : "-"}</td>
               <td>
                 ${template.status === "draft" ? `<button class="warning" data-publish="${template.id}" data-version="${template.current_version_id}">Publish</button>` : ""}
+                ${template.status === "published" ? `<button data-return="${template.id}" data-version="${version?.version_number || 1}">Return</button>` : ""}
               </td>
             </tr>
           `;
@@ -395,6 +503,9 @@
 
         document.querySelectorAll("[data-publish]").forEach((button) => {
           button.addEventListener("click", () => publishTemplate(button.dataset.publish, button.dataset.version).catch((error) => showMessage(error.message, "error")));
+        });
+        document.querySelectorAll("[data-return]").forEach((button) => {
+          button.addEventListener("click", () => returnTemplate(button.dataset.return, Number(button.dataset.version || 1)).catch((error) => showMessage(error.message, "error")));
         });
       }
 
@@ -428,6 +539,46 @@
         await loadTemplates();
       }
 
+      async function returnTemplate(templateId, currentVersionNumber) {
+        const template = await supabaseFetch(
+          `/rest/v1/form_templates?id=eq.${templateId}&select=id,name,status,current_version_id,form_template_versions(id,version_number,schema)&limit=1`,
+        ).then((items) => items[0]);
+        const currentVersion = (template.form_template_versions || []).find((item) => item.id === template.current_version_id);
+        const versionId = crypto.randomUUID();
+        await supabaseFetch("/rest/v1/form_template_versions", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            id: versionId,
+            template_id: templateId,
+            version_number: currentVersionNumber + 1,
+            status: "draft",
+            schema: currentVersion?.schema || allQuestionTypesSchema(),
+            created_by: currentUser.id,
+          }),
+        });
+        await supabaseFetch(`/rest/v1/form_templates?id=eq.${templateId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            status: "draft",
+            owner_role: "HR_ADMIN",
+            current_version_id: versionId,
+            updated_by: currentUser.id,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+        await writeAuditEvent("form_template.returned", templateId, "published", "draft", {
+          owner: "HR_ADMIN",
+          nextAction: "publish",
+          previousVersionId: template.current_version_id,
+          versionId,
+          versionNumber: currentVersionNumber + 1,
+        }, "Returned to draft for template refinement");
+        showMessage("Template returned to draft.", "success");
+        await loadTemplates();
+      }
+
       document.querySelector("#formTemplate").addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
@@ -446,6 +597,8 @@
               owner_role: "HR_ADMIN",
               created_by: currentUser.id,
               updated_by: currentUser.id,
+              template_category: "custom",
+              is_system_template: false,
             }),
           });
           await supabaseFetch("/rest/v1/form_template_versions", {
@@ -478,7 +631,57 @@
         }
       });
 
+      async function clonePreset(presetKey) {
+        const preset = presetTemplates[presetKey];
+        const templateId = crypto.randomUUID();
+        const versionId = crypto.randomUUID();
+        await supabaseFetch("/rest/v1/form_templates", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            id: templateId,
+            name: preset.name,
+            description: preset.description,
+            module: preset.module,
+            status: "draft",
+            owner_role: "HR_ADMIN",
+            template_category: "custom",
+            is_system_template: false,
+            created_by: currentUser.id,
+            updated_by: currentUser.id,
+          }),
+        });
+        await supabaseFetch("/rest/v1/form_template_versions", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            id: versionId,
+            template_id: templateId,
+            version_number: 1,
+            status: "draft",
+            schema: preset.schema,
+            created_by: currentUser.id,
+          }),
+        });
+        await supabaseFetch(`/rest/v1/form_templates?id=eq.${templateId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ current_version_id: versionId }),
+        });
+        await writeAuditEvent("form_template.cloned_from_preset", templateId, null, "draft", {
+          owner: "HR_ADMIN",
+          nextAction: "publish",
+          presetKey,
+          versionId,
+        });
+        showMessage(`${preset.name} created as a draft.`, "success");
+        await loadTemplates();
+      }
+
       document.querySelector("#refreshButton").addEventListener("click", () => loadTemplates().catch((error) => showMessage(error.message, "error")));
+      document.querySelectorAll("[data-preset]").forEach((button) => {
+        button.addEventListener("click", () => clonePreset(button.dataset.preset).catch((error) => showMessage(error.message, "error")));
+      });
       preview.textContent = JSON.stringify(allQuestionTypesSchema(), null, 2);
       document.querySelector("#name").addEventListener("input", () => {
         preview.textContent = JSON.stringify(allQuestionTypesSchema(), null, 2);

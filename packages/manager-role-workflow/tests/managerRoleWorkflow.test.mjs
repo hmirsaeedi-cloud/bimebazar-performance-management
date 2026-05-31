@@ -32,6 +32,13 @@ describe("managerRoleWorkflow", () => {
     );
   });
 
+  it("supports explicit HR Admin override to active manager state", () => {
+    assert.equal(
+      transitionManagerRoleState(managerRoleStatuses.REVOKED_MANAGER, managerRoleActions.OVERRIDE_MANAGER_ROLE).status,
+      managerRoleStatuses.ACTIVE_MANAGER,
+    );
+  });
+
   it("rejects invalid transitions", () => {
     assert.throws(
       () => transitionManagerRoleState(managerRoleStatuses.NOT_MANAGER, managerRoleActions.DIRECT_REPORT_REMOVED),

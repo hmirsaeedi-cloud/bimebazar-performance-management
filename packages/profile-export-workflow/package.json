@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/profile-export-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/profileExportWorkflow.d.ts",
+      "default": "./src/profileExportWorkflow.mjs"
+    }
+  }
+}

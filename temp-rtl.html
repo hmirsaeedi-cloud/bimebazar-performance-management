@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Language Settings</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --blue: #2f5f8f;
+        --danger: #b13d3a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { max-width: 1040px; margin: 0 auto; padding: 28px 18px 48px; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; font-size: 1.15rem; }
+      p { margin: 0; color: var(--muted); }
+      nav a { color: var(--blue); font-weight: 800; text-decoration: none; }
+      section {
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      }
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(170px, 1fr)); gap: 12px; align-items: end; }
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 750;
+      }
+      input, select {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        color: var(--ink);
+        font: inherit;
+      }
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+      .preview {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .surface {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .surface[dir="rtl"] {
+        font-family: Tahoma, Vazirmatn, Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      dl { display: grid; grid-template-columns: 190px 1fr; gap: 10px; margin: 0; }
+      dt { color: var(--muted); font-weight: 800; }
+      dd { margin: 0; }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      @media (max-width: 760px) {
+        header { align-items: stretch; flex-direction: column; }
+        .grid, .preview, dl { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1 id="pageTitle">Language Settings</h1>
+          <p id="pageSubtitle">Temporary Core page for Persian/English and RTL/LTR preferences.</p>
+        </div>
+        <nav>
+          <a href="/temp-calendar.html">Calendar</a>
+          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Current Preferences</h2>
+        <dl id="currentPrefs">
+          <dt>Status</dt><dd>Loading...</dd>
+        </dl>
+      </section>
+
+      <section>
+        <h2>Update My Language</h2>
+        <form id="languageForm" class="grid">
+          <label>Language
+            <select id="preferredLanguage">
+              <option value="fa">Persian</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <label>Direction
+            <select id="textDirection">
+              <option value="rtl">RTL</option>
+              <option value="ltr">LTR</option>
+            </select>
+          </label>
+          <label>Reason<input id="reason" value="User updated language preferences" /></label>
+          <button type="submit">Save preferences</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <h2>Layout Preview</h2>
+        <div class="preview">
+          <div class="surface" dir="rtl" lang="fa">
+            <strong>اهداف عملکرد</strong>
+            <p>نمایش راست به چپ برای تجربه فارسی در بستر مدیریت عملکرد.</p>
+          </div>
+          <div class="surface" dir="ltr" lang="en">
+            <strong>Performance goals</strong>
+            <p>Left-to-right display for English product workflows.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+
+      const message = document.querySelector("#message");
+      const currentPrefs = document.querySelector("#currentPrefs");
+      const languageSelect = document.querySelector("#preferredLanguage");
+      const directionSelect = document.querySelector("#textDirection");
+
+      const copy = {
+        fa: {
+          title: "تنظیمات زبان",
+          subtitle: "صفحه موقت Core برای فارسی/انگلیسی و راست به چپ/چپ به راست.",
+        },
+        en: {
+          title: "Language Settings",
+          subtitle: "Temporary Core page for Persian/English and RTL/LTR preferences.",
+        },
+      };
+
+      function applyLanguage(language, direction) {
+        document.documentElement.lang = language;
+        document.documentElement.dir = direction;
+        document.querySelector("#pageTitle").textContent = copy[language].title;
+        document.querySelector("#pageSubtitle").textContent = copy[language].subtitle;
+      }
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      async function writeAudit(profile, previous, reason) {
+        const nextStatus = previous.language_preference_status === "hr_override_pending" ? "hr_overridden" : "user_configured";
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: profile.id,
+            action: "core.language_preferences.updated",
+            entity_type: "language_preferences",
+            entity_id: profile.id,
+            from_status: previous.language_preference_status || "defaulted",
+            to_status: nextStatus,
+            reason,
+            metadata: {
+              owner: "EMPLOYEE",
+              nextAction: "user_update",
+              previous,
+              next: profile,
+            },
+          }),
+        });
+      }
+
+      async function loadPrefs() {
+        const [profile] = await supabaseFetch(`/rest/v1/profiles?id=eq.${currentUser.id}&select=id,email,display_name,preferred_language,text_direction,language_preference_status`);
+        if (!profile) throw new Error("Profile not found");
+        const language = profile.preferred_language || "fa";
+        const direction = profile.text_direction || (language === "fa" ? "rtl" : "ltr");
+        languageSelect.value = language;
+        directionSelect.value = direction;
+        applyLanguage(language, direction);
+        currentPrefs.innerHTML = `
+          <dt>Name</dt><dd>${profile.display_name}</dd>
+          <dt>Email</dt><dd>${profile.email}</dd>
+          <dt>Language</dt><dd>${language}</dd>
+          <dt>Direction</dt><dd>${direction}</dd>
+          <dt>Status</dt><dd>${profile.language_preference_status || "defaulted"}</dd>
+        `;
+        return profile;
+      }
+
+      languageSelect.addEventListener("change", () => {
+        directionSelect.value = languageSelect.value === "fa" ? "rtl" : "ltr";
+        applyLanguage(languageSelect.value, directionSelect.value);
+      });
+      directionSelect.addEventListener("change", () => applyLanguage(languageSelect.value, directionSelect.value));
+
+      document.querySelector("#languageForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const previous = await loadPrefs();
+          const nextStatus = previous.language_preference_status === "hr_override_pending" ? "hr_overridden" : "user_configured";
+          await supabaseFetch(`/rest/v1/profiles?id=eq.${currentUser.id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify({
+              preferred_language: languageSelect.value,
+              text_direction: directionSelect.value,
+              language_preference_status: nextStatus,
+            }),
+          });
+          const next = await loadPrefs();
+          await writeAudit(next, previous, document.querySelector("#reason").value);
+          showMessage("Language preferences saved.", "success");
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadPrefs();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      })();
+    </script>
+  </body>
+</html>

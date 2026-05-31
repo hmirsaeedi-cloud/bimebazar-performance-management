@@ -1,0 +1,22 @@
+[
+  {
+    "templateKey": "self_assessment_default",
+    "name": "Self-assessment default",
+    "module": "self_assessment"
+  },
+  {
+    "templateKey": "manager_evaluation_default",
+    "name": "Manager evaluation default",
+    "module": "manager_evaluation"
+  },
+  {
+    "templateKey": "upward_feedback_default",
+    "name": "Upward feedback default",
+    "module": "upward_feedback"
+  },
+  {
+    "templateKey": "pulse_survey_default",
+    "name": "Pulse survey default",
+    "module": "survey"
+  }
+]

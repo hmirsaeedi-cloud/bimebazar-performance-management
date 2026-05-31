@@ -5,6 +5,7 @@ import {
 } from "@bimebazar/manager-role-workflow";
 import { writeAuditEvent } from "../audit/audit.service.js";
 import type { AuthUser } from "../auth/auth.types.js";
+import { notifyManagerRoleChanged } from "../notifications/notification.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 
 interface SyncResult {
@@ -111,8 +112,15 @@ export async function syncComputedManagerRole(input: {
       metadata: {
         owner: nextState.owner,
         nextAction: nextState.nextAction,
+        assignmentType: "computed",
+        roleCode: "MANAGER",
         directReportCount: data.direct_report_count,
       },
+    });
+    await notifyManagerRoleChanged({
+      userId: data.user_id,
+      status: data.status,
+      directReportCount: data.direct_report_count,
     });
   }
 
@@ -149,5 +157,22 @@ export async function syncAllComputedManagerRoles(input: { actor: AuthUser; reas
     results.push(await syncComputedManagerRole({ actor: input.actor, managerUserId: id, reason: input.reason }));
   }
 
-  return results.filter(Boolean);
+  const filteredResults = results.filter(Boolean);
+  await writeAuditEvent({
+    actorUserId: input.actor.id,
+    action: "rbac.manager_roles_resynced",
+    entityType: "profile_role",
+    entityId: "MANAGER:computed",
+    fromStatus: null,
+    toStatus: "resynced",
+    reason: input.reason,
+    metadata: {
+      owner: "SYSTEM",
+      nextAction: null,
+      checkedUsers: ids.size,
+      changedUsers: filteredResults.filter((result) => result?.changed).length,
+    },
+  });
+
+  return filteredResults;
 }

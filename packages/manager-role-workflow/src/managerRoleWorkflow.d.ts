@@ -8,6 +8,7 @@ export const managerRoleActions: Readonly<{
   DIRECT_REPORT_ADDED: "direct_report_added";
   DIRECT_REPORT_REMOVED: "direct_report_removed";
   RESYNC_MANAGER_ROLE: "resync_manager_role";
+  OVERRIDE_MANAGER_ROLE: "override_manager_role";
 }>;
 
 export type ManagerRoleStatus = (typeof managerRoleStatuses)[keyof typeof managerRoleStatuses];

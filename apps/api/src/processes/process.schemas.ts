@@ -55,3 +55,34 @@ export const listProcessesQuerySchema = z.object({
 export const processDecisionSchema = z.object({
   reason: z.string().min(8).max(500).optional(),
 });
+
+export const selfAssessmentResponseSchema = z.object({
+  responses: z.record(z.unknown()).default({}),
+});
+
+export const selfAssessmentReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const selfAssessmentVisibilitySchema = z.object({
+  visibility: z.object({
+    employeeCanViewManagerReview: z.boolean().default(false),
+    managerCanViewEmployeeDraft: z.boolean().default(false),
+  }),
+});
+
+export const downwardEvaluationResponseSchema = z.object({
+  managerResponses: z.record(z.unknown()).default({}),
+  reviewerResponses: z.record(z.unknown()).default({}),
+});
+
+export const downwardEvaluationReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const downwardEvaluationVisibilitySchema = z.object({
+  visibility: z.object({
+    employeeCanViewEvaluation: z.boolean().default(false),
+    managerCanViewReviewerNotes: z.boolean().default(false),
+  }),
+});

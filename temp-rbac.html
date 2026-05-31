@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar RBAC Manager Sync</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --danger: #b13d3a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 28px 18px 48px; }
+      header, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; }
+      p { margin: 0; color: var(--muted); }
+      section {
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 750;
+      }
+      input {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        color: var(--ink);
+        font: inherit;
+      }
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+      .grid { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: end; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 0.78rem; }
+      .pill {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #e8f4f2;
+        color: #075b5b;
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      @media (max-width: 860px) {
+        header, .toolbar, .grid { align-items: stretch; grid-template-columns: 1fr; flex-direction: column; }
+        table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Manager Role Sync</h1>
+          <p>Temporary HR Admin page for computed MANAGER role assignment.</p>
+        </div>
+        <nav>
+          <a href="/temp-profiles.html">Profiles</a>
+          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Resync Computed Roles</h2>
+        <div class="grid">
+          <label>Audit Reason<input id="reason" value="Manual HR Admin manager-role resync" /></label>
+          <button id="syncButton" type="button">Run sync</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        </div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Manager Candidates</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Direct Reports</th>
+              <th>Computed Role</th>
+              <th>Changed</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let lastResults = new Map();
+
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      async function writeAudit(action, targetUserId, fromStatus, toStatus, metadata, reason) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: targetUserId,
+            action,
+            entity_type: "profile_role",
+            entity_id: targetUserId ? `${targetUserId}:MANAGER` : "MANAGER:computed",
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata,
+          }),
+        });
+      }
+
+      async function loadCandidates() {
+        const [profiles, roleRows] = await Promise.all([
+          supabaseFetch("/rest/v1/profiles?select=id,email,display_name,manager_id,account_status&order=display_name"),
+          supabaseFetch("/rest/v1/profile_roles?select=user_id,role_code,assignment_type,status&role_code=eq.MANAGER&assignment_type=eq.computed"),
+        ]);
+        const activeProfiles = profiles.filter((profile) => profile.account_status === "active");
+        const roleByUser = new Map(roleRows.map((role) => [role.user_id, role]));
+        const reportCounts = new Map();
+        for (const profile of activeProfiles) {
+          if (!profile.manager_id) continue;
+          reportCounts.set(profile.manager_id, (reportCounts.get(profile.manager_id) || 0) + 1);
+        }
+        const candidates = activeProfiles
+          .filter((profile) => reportCounts.has(profile.id) || roleByUser.has(profile.id))
+          .map((profile) => ({
+            ...profile,
+            directReportCount: reportCounts.get(profile.id) || 0,
+            computedStatus: roleByUser.get(profile.id)?.status || "not_manager",
+            changed: lastResults.get(profile.id)?.changed,
+          }));
+
+        countLabel.textContent = `${candidates.length} manager candidate${candidates.length === 1 ? "" : "s"}`;
+        rows.innerHTML = candidates.map((profile) => `
+          <tr>
+            <td>${profile.display_name}</td>
+            <td>${profile.email}</td>
+            <td>${profile.directReportCount}</td>
+            <td><span class="pill">${profile.computedStatus}</span></td>
+            <td>${profile.changed === undefined ? "" : profile.changed ? "Yes" : "No"}</td>
+          </tr>
+        `).join("");
+        return { activeProfiles, roleByUser, reportCounts };
+      }
+
+      async function runSync() {
+        const reason = document.querySelector("#reason").value;
+        const { activeProfiles, roleByUser, reportCounts } = await loadCandidates();
+        const ids = new Set([...activeProfiles.map((profile) => profile.id), ...roleByUser.keys()]);
+        const results = [];
+
+        for (const id of ids) {
+          const directReportCount = reportCounts.get(id) || 0;
+          const existing = roleByUser.get(id);
+          const nextStatus = directReportCount > 0 ? "active" : "revoked";
+          const changed = (existing?.status || "not_manager") !== nextStatus;
+          if (directReportCount > 0) {
+            await supabaseFetch("/rest/v1/profile_roles?on_conflict=user_id,role_code,assignment_type", {
+              method: "POST",
+              headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+              body: JSON.stringify({
+                user_id: id,
+                role_code: "MANAGER",
+                assignment_type: "computed",
+                status: "active",
+                assigned_at: new Date().toISOString(),
+                revoked_at: null,
+                reason: "Auto-assigned because employee has active direct reports",
+              }),
+            });
+          } else if (existing) {
+            await supabaseFetch(`/rest/v1/profile_roles?user_id=eq.${id}&role_code=eq.MANAGER&assignment_type=eq.computed`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({
+                status: "revoked",
+                revoked_at: new Date().toISOString(),
+                reason: "Auto-revoked because employee has no active direct reports",
+              }),
+            });
+          }
+          if (changed) {
+            await writeAudit(
+              nextStatus === "active" ? "rbac.manager_role_auto_assigned" : "rbac.manager_role_auto_revoked",
+              id,
+              existing?.status === "active" ? "active_manager" : existing?.status === "revoked" ? "revoked_manager" : "not_manager",
+              nextStatus === "active" ? "active_manager" : "revoked_manager",
+              { owner: "SYSTEM", nextAction: nextStatus === "active" ? "direct_report_removed" : "direct_report_added", directReportCount, assignmentType: "computed", roleCode: "MANAGER" },
+              reason,
+            );
+          }
+          results.push({ user_id: id, status: nextStatus, direct_report_count: directReportCount, changed });
+        }
+
+        await writeAudit("rbac.manager_roles_resynced", null, null, "resynced", {
+          owner: "SYSTEM",
+          nextAction: null,
+          checkedUsers: ids.size,
+          changedUsers: results.filter((result) => result.changed).length,
+        }, reason);
+        lastResults = new Map(results.map((result) => [result.user_id, result]));
+        showMessage(`Sync complete. ${results.filter((result) => result.changed).length} role change${results.filter((result) => result.changed).length === 1 ? "" : "s"}.`, "success");
+        await loadCandidates();
+      }
+
+      document.querySelector("#syncButton").addEventListener("click", () => runSync().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#refreshButton").addEventListener("click", () => loadCandidates().catch((error) => showMessage(error.message, "error")));
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadCandidates();
+        } catch (error) {
+          showMessage(error.message, "error");
+          countLabel.textContent = "Could not load RBAC manager candidates";
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Downward Routing</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --gold: #c48922;
+        --danger: #b13d3a;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { max-width: 1180px; margin: 0 auto; padding: 28px 18px 48px; }
+      header, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; }
+      p { margin: 0; color: var(--muted); }
+      section { margin-top: 18px; border: 1px solid var(--line); border-radius: 8px; padding: 18px; background: var(--panel); box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08); }
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(170px, 1fr)); gap: 12px; }
+      label { display: grid; gap: 6px; color: var(--muted); font-size: 0.82rem; font-weight: 750; }
+      input, select { border: 1px solid var(--line); border-radius: 8px; padding: 10px; color: var(--ink); font: inherit; }
+      button { min-height: 40px; border: 0; border-radius: 8px; background: var(--teal); color: #fff; cursor: pointer; font: inherit; font-weight: 800; }
+      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+      button.warning { background: var(--gold); }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 0.78rem; }
+      .pill { display: inline-flex; border-radius: 999px; padding: 4px 8px; background: #e8f4f2; color: #075b5b; font-size: 0.76rem; font-weight: 800; }
+      .muted { margin-top: 4px; color: var(--muted); font-size: 0.75rem; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      @media (max-width: 860px) {
+        header, .toolbar { align-items: stretch; flex-direction: column; }
+        .grid { grid-template-columns: 1fr; }
+        table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Downward Process Routing</h1>
+          <p>Manager evaluation routed through next-level manager and HRBP review.</p>
+        </div>
+        <nav>
+          <a href="/temp-process-engine.html">Process engine</a>
+          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Start Routing Task</h2>
+        <form id="startForm" class="grid">
+          <label>Active Downward Process<select id="processId"></select></label>
+          <label>Eligible Participant<select id="participantId"></select></label>
+          <button type="submit">Start downward evaluation</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Downward Evaluations</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Process</th>
+              <th>Status</th>
+              <th>Owner</th>
+              <th>Next Action</th>
+              <th>Routing</th>
+              <th>Visibility</th>
+              <th>Move</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let processes = [];
+      let participants = [];
+      let profiles = [];
+      let evaluations = [];
+      let attachments = [];
+      let mpas = [];
+
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function fillSelect(select, options, label, render) {
+        select.innerHTML = `<option value="">${label}</option>` + options.map((item) => `<option value="${item.id}">${render(item)}</option>`).join("");
+      }
+
+      function profileName(id) {
+        const profile = profiles.find((item) => item.id === id);
+        return profile?.display_name || profile?.email || id || "Unassigned";
+      }
+
+      async function writeAudit(action, entityId, targetUserId, fromStatus, toStatus, metadata, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: targetUserId,
+            action,
+            entity_type: "process_downward_evaluation",
+            entity_id: entityId,
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata,
+          }),
+        });
+      }
+
+      async function writeAttachmentAudit(action, attachment, fromStatus, toStatus) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: attachment.employee_id,
+            action,
+            entity_type: "mpa_evaluation_attachment",
+            entity_id: attachment.id,
+            from_status: fromStatus,
+            to_status: toStatus,
+            metadata: {
+              mpaId: attachment.mpa_id,
+              processId: attachment.process_id,
+              cycleId: attachment.cycle_id,
+              evaluationType: attachment.evaluation_type,
+              evaluationId: attachment.evaluation_id,
+              owner: attachment.owner_role,
+              nextAction: attachment.next_action,
+              matchStrategy: attachment.match_strategy,
+            },
+          }),
+        });
+      }
+
+      function nextState(status, action) {
+        const table = {
+          manager_draft: { submit: ["manager_submitted", "NEXT_LEVEL_MANAGER", "next_level_approve"] },
+          returned_to_manager: { submit: ["manager_submitted", "NEXT_LEVEL_MANAGER", "next_level_approve"] },
+          manager_submitted: { next_level_approve: ["next_level_review", "HRBP", "hrbp_approve"], return: ["returned_to_manager", "MANAGER", "submit"] },
+          next_level_review: { hrbp_approve: ["hrbp_review", "HRBP", "complete"], return: ["returned_to_manager", "MANAGER", "submit"] },
+          hrbp_review: { complete: ["completed", "SYSTEM", null], return: ["returned_to_manager", "MANAGER", "submit"] },
+        };
+        return table[status]?.[action];
+      }
+
+      async function loadData() {
+        [processes, profiles] = await Promise.all([
+          supabaseFetch("/rest/v1/performance_processes?process_type=eq.downward_evaluation&status=eq.active&select=*&order=created_at.desc"),
+          supabaseFetch("/rest/v1/profiles?select=id,display_name,email,manager_id,hrbp_id&order=display_name"),
+        ]);
+        fillSelect(document.querySelector("#processId"), processes, "Select active downward process", (item) => item.name);
+        await loadParticipants();
+        await loadEvaluations();
+      }
+
+      async function loadParticipants() {
+        const processId = document.querySelector("#processId").value || processes[0]?.id || "";
+        if (processId) document.querySelector("#processId").value = processId;
+        participants = processId
+          ? await supabaseFetch(`/rest/v1/process_participants?process_id=eq.${processId}&status=neq.excluded&select=id,employee_id,manager_id,status,metadata&order=created_at.desc`)
+          : [];
+        fillSelect(document.querySelector("#participantId"), participants, "Select eligible employee", (item) => `${profileName(item.employee_id)} - manager: ${profileName(item.manager_id)}`);
+      }
+
+      async function loadEvaluations() {
+        [evaluations, attachments, mpas] = await Promise.all([
+          supabaseFetch("/rest/v1/process_downward_evaluations?select=*&order=updated_at.desc"),
+          supabaseFetch("/rest/v1/mpa_evaluation_attachments?evaluation_type=eq.downward_evaluation&select=*"),
+          supabaseFetch("/rest/v1/mpas?select=id,title,status,employee_id,cycle_id&status=neq.archived"),
+        ]);
+        countLabel.textContent = `${evaluations.length} downward evaluation${evaluations.length === 1 ? "" : "s"}`;
+        rows.innerHTML = evaluations.map((item) => {
+          const process = processes.find((processItem) => processItem.id === item.process_id);
+          const attachment = attachments.find((link) => link.evaluation_id === item.id);
+          const attachedMpa = mpas.find((mpa) => mpa.id === item.attached_mpa_id || mpa.id === attachment?.mpa_id);
+          return `
+            <tr>
+              <td>${profileName(item.employee_id)}</td>
+              <td>
+                ${process?.name || item.process_id}
+                <div class="muted">${attachedMpa ? `MPA: ${attachedMpa.title} (${attachedMpa.status})` : "No MPA attached"}</div>
+              </td>
+              <td>
+                <span class="pill">${item.status}</span>
+                ${item.last_return_reason ? `<div class="muted">Returned: ${item.last_return_reason}</div>` : ""}
+              </td>
+              <td>${item.owner_role}</td>
+              <td>${item.next_action || ""}</td>
+              <td>
+                <div class="muted">Manager: ${profileName(item.manager_id)}</div>
+                <div class="muted">Next-level: ${profileName(item.next_level_manager_id)}</div>
+                <div class="muted">HRBP: ${profileName(item.hrbp_id)}</div>
+              </td>
+              <td>${item.visibility?.employeeCanViewEvaluation ? "Employee visible" : "Hidden from employee"}<div class="muted">${attachment?.status || "mpa not checked"}</div></td>
+              <td class="actions">${renderActions(item)}</td>
+            </tr>
+          `;
+        }).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => {
+          button.addEventListener("click", () => moveEvaluation(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error")));
+        });
+      }
+
+      function renderActions(item) {
+        const actions = {
+          manager_draft: [["submit", "Manager submit"], ["visibility", "Show result"]],
+          returned_to_manager: [["submit", "Resubmit"], ["visibility", "Show result"]],
+          manager_submitted: [["next_level_approve", "Next-level approve"], ["return", "Return"]],
+          next_level_review: [["hrbp_approve", "HRBP approve"], ["return", "Return"]],
+          hrbp_review: [["complete", "Complete"], ["return", "Return"], ["visibility", "Show result"]],
+        }[item.status] || [];
+        return actions.map(([action, label]) => `<button data-id="${item.id}" data-action="${action}" class="${action === "return" ? "warning" : ""}">${label}</button>`).join("");
+      }
+
+      async function moveEvaluation(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/process_downward_evaluations?id=eq.${id}&select=*`);
+        if (action === "visibility") {
+          const visibility = {
+            ...current.visibility,
+            employeeCanViewEvaluation: true,
+            managerCanViewReviewerNotes: true,
+          };
+          await supabaseFetch(`/rest/v1/process_downward_evaluations?id=eq.${id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ visibility, updated_by: currentUser.id, updated_at: new Date().toISOString() }),
+          });
+          await writeAudit("process.downward_evaluation.visibility_changed", id, current.employee_id, current.status, current.status, {
+            owner: current.owner_role,
+            nextAction: current.next_action,
+            processId: current.process_id,
+            from: current.visibility,
+            to: visibility,
+          });
+          showMessage("Visibility changed and audited.", "success");
+          await loadEvaluations();
+          return;
+        }
+        const next = nextState(current.status, action);
+        if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
+        const now = new Date().toISOString();
+        const reason = action === "return" ? prompt("Why is this evaluation returned?", "Needs clearer evidence before approval.") : null;
+        const managerResponses = action === "submit"
+          ? {
+              performanceSummary: "Strong delivery against agreed priorities.",
+              evidence: "Customer follow-up and monthly conversion evidence attached.",
+              rating: "meets_expectations",
+            }
+          : current.manager_responses;
+        const reviewerResponses = {
+          ...(current.reviewer_responses || {}),
+          [action]: `${action} completed at ${now}`,
+        };
+        await supabaseFetch(`/rest/v1/process_downward_evaluations?id=eq.${id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            status: next[0],
+            owner_role: next[1],
+            next_action: next[2],
+            manager_responses: managerResponses,
+            reviewer_responses: reviewerResponses,
+            manager_submitted_at: action === "submit" ? now : current.manager_submitted_at,
+            next_level_approved_at: action === "next_level_approve" ? now : current.next_level_approved_at,
+            hrbp_approved_at: action === "hrbp_approve" ? now : current.hrbp_approved_at,
+            returned_at: action === "return" ? now : current.returned_at,
+            completed_at: action === "complete" ? now : current.completed_at,
+            last_return_reason: action === "return" ? reason : current.last_return_reason,
+            updated_by: currentUser.id,
+            updated_at: now,
+          }),
+        });
+        const actionName = {
+          submit: "submitted",
+          next_level_approve: "next_level_approved",
+          hrbp_approve: "hrbp_approved",
+          return: "returned",
+          complete: "completed",
+        }[action];
+        await writeAudit(`process.downward_evaluation.${actionName}`, id, current.employee_id, current.status, next[0], {
+          owner: next[1],
+          nextAction: next[2],
+          processId: current.process_id,
+          managerResponseKeys: Object.keys(managerResponses || {}),
+          reviewerResponseKeys: Object.keys(reviewerResponses || {}),
+        }, reason);
+        showMessage(`Downward evaluation moved to ${next[0]}.`, "success");
+        await loadEvaluations();
+      }
+
+      document.querySelector("#processId").addEventListener("change", () => loadParticipants().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#refreshButton").addEventListener("click", () => loadData().catch((error) => showMessage(error.message, "error")));
+
+      document.querySelector("#startForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const process = processes.find((item) => item.id === document.querySelector("#processId").value);
+          const participant = participants.find((item) => item.id === document.querySelector("#participantId").value);
+          if (!process) throw new Error("Select an active downward process first.");
+          if (!participant) throw new Error("Select an eligible participant first.");
+          if (!participant.manager_id) throw new Error("This employee needs a manager before routing can start.");
+          if (!process.locked_form_template_version_id || !process.locked_form_schema) {
+            throw new Error("Process must be configured with a locked form version before downward routing can start.");
+          }
+          const employee = profiles.find((item) => item.id === participant.employee_id);
+          const manager = profiles.find((item) => item.id === participant.manager_id);
+          const existing = await supabaseFetch(`/rest/v1/process_downward_evaluations?process_id=eq.${process.id}&employee_id=eq.${participant.employee_id}&select=id,status`);
+          if (existing.length) throw new Error(`This employee already has a ${existing[0].status} downward evaluation for this process.`);
+          const id = crypto.randomUUID();
+          await supabaseFetch("/rest/v1/process_downward_evaluations", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              id,
+              process_id: process.id,
+              participant_id: participant.id,
+              employee_id: participant.employee_id,
+              manager_id: participant.manager_id,
+              next_level_manager_id: manager?.manager_id || null,
+              hrbp_id: employee?.hrbp_id || null,
+              form_template_version_id: process.locked_form_template_version_id,
+              locked_form_schema: process.locked_form_schema,
+              status: "manager_draft",
+              owner_role: "MANAGER",
+              next_action: "submit",
+              manager_responses: {},
+              reviewer_responses: {},
+              visibility: {
+                employeeCanViewEvaluation: false,
+                managerCanViewReviewerNotes: false,
+              },
+              created_by: currentUser.id,
+              updated_by: currentUser.id,
+            }),
+          });
+          await supabaseFetch(`/rest/v1/process_participants?id=eq.${participant.id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ status: "in_progress", updated_at: new Date().toISOString() }),
+          });
+          await writeAudit("process.downward_evaluation.created", id, participant.employee_id, null, "manager_draft", {
+            owner: "MANAGER",
+            nextAction: "submit",
+            processId: process.id,
+            lockedFormTemplateVersionId: process.locked_form_template_version_id,
+            lockedFormVersionNumber: process.locked_form_version_number,
+            routingChain: {
+              managerId: participant.manager_id,
+              nextLevelManagerId: manager?.manager_id || null,
+              hrbpId: employee?.hrbp_id || null,
+            },
+          });
+          await autoAttachMpa({
+            process,
+            evaluationId: id,
+            employeeId: participant.employee_id,
+          });
+          showMessage("Downward evaluation started.", "success");
+          await loadData();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      async function autoAttachMpa(input) {
+        const candidates = await supabaseFetch(`/rest/v1/mpas?employee_id=eq.${input.employeeId}&status=neq.archived&select=id,employee_id,cycle_id,status,title,updated_at&order=updated_at.desc&limit=1`);
+        const mpa = candidates[0] || null;
+        const status = mpa ? "attached" : "missing_mpa";
+        const owner = mpa ? "SYSTEM" : "MANAGER";
+        const nextAction = mpa ? null : "override_attach";
+        const attachmentId = crypto.randomUUID();
+        const attachment = {
+          id: attachmentId,
+          mpa_id: mpa?.id || null,
+          process_id: input.process.id,
+          employee_id: input.employeeId,
+          cycle_id: mpa?.cycle_id || null,
+          evaluation_type: "downward_evaluation",
+          evaluation_id: input.evaluationId,
+          status,
+          owner_role: owner,
+          next_action: nextAction,
+          match_strategy: "employee_latest_non_archived",
+          attached_by: mpa ? currentUser.id : null,
+          attached_at: mpa ? new Date().toISOString() : null,
+          metadata: {
+            source: "auto_attach",
+            matchedMpaStatus: mpa?.status || null,
+          },
+        };
+        await supabaseFetch("/rest/v1/mpa_evaluation_attachments?on_conflict=evaluation_type,evaluation_id", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify(attachment),
+        });
+        await supabaseFetch(`/rest/v1/process_downward_evaluations?id=eq.${input.evaluationId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ attached_mpa_id: mpa?.id || null, updated_at: new Date().toISOString() }),
+        });
+        await writeAttachmentAudit(mpa ? "mpa.auto_attached_to_evaluation" : "mpa.auto_attach_missing", attachment, "matched", status);
+      }
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadData();
+        } catch (error) {
+          showMessage(error.message, "error");
+          countLabel.textContent = "Could not load downward evaluations";
+        }
+      })();
+    </script>
+  </body>
+</html>

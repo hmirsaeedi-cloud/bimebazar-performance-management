@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/downward-routing-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/downwardRoutingWorkflow.d.ts",
+      "default": "./src/downwardRoutingWorkflow.mjs"
+    }
+  }
+}

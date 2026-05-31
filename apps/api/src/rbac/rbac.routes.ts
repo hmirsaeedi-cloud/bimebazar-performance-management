@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requirePermission } from "../middleware/rbac.js";
 import { syncAllComputedManagerRoles } from "./managerRole.service.js";
-import { assignRoleSchema, revokeRoleSchema, roleCodeSchema } from "./rbac.schemas.js";
+import { assignRoleSchema, revokeRoleSchema, roleCodeSchema, syncManagerRolesSchema } from "./rbac.schemas.js";
 import { assignUserRole, listRbacCatalog, listUserRoleAssignments, revokeUserRole } from "./rbac.service.js";
 
 export const rbacRouter = Router();
@@ -16,9 +16,10 @@ rbacRouter.get("/", requirePermission("rbac.read"), async (_req, res, next) => {
 
 rbacRouter.post("/sync-manager-roles", requirePermission("rbac.sync_manager_roles"), async (req, res, next) => {
   try {
+    const input = syncManagerRolesSchema.parse(req.body);
     const results = await syncAllComputedManagerRoles({
       actor: req.user!,
-      reason: "Manual HR Admin manager-role resync",
+      reason: input.reason,
     });
 
     res.json({ results });

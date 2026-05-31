@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import {
+  getProfileExportState,
+  profileExportActions,
+  profileExportStatuses,
+  transitionProfileExportState,
+} from "@bimebazar/profile-export-workflow";
+import {
   getProfileState,
   profileActions,
   profileStatuses,
@@ -8,6 +14,7 @@ import {
 import { writeAuditEvent } from "../audit/audit.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 import { notifyUserCreated } from "../notifications/notification.service.js";
+import { notifyEmployeeExportReady } from "../notifications/notification.service.js";
 import { syncComputedManagerRole } from "../rbac/managerRole.service.js";
 import type { AuthUser } from "../auth/auth.types.js";
 
@@ -16,7 +23,8 @@ const profileSelect = `
   full_name_persian,full_name_english,username,join_date,exit_date,
   manager_id,team_id,business_unit_id,department_id,level,position_title,
   phone,function_lead_id,hrbp_id,preferred_calendar,preferred_locale,
-  date_display_timezone,created_at,updated_at
+  date_display_timezone,calendar_preference_status,preferred_language,
+  text_direction,language_preference_status,created_at,updated_at
 `;
 
 interface CreateEmployeeProfileInput {
@@ -69,11 +77,120 @@ export async function listEmployeeProfiles(input: {
   return { data: data ?? [], count: count ?? 0, page: input.page, pageSize: input.pageSize };
 }
 
+export async function createEmployeeExportReport(input: {
+  actor: AuthUser;
+  search?: string;
+  businessUnitId?: string;
+  departmentId?: string;
+  teamId?: string;
+  status?: string;
+  level?: string;
+  columns: string[];
+}) {
+  const admin = createSupabaseAdminClient();
+  const requestedState = getProfileExportState(profileExportStatuses.REQUESTED);
+  const generatingState = transitionProfileExportState(requestedState.status, profileExportActions.GENERATE);
+  const readyState = transitionProfileExportState(generatingState.status, profileExportActions.MARK_READY);
+  const filters = {
+    search: input.search,
+    businessUnitId: input.businessUnitId,
+    departmentId: input.departmentId,
+    teamId: input.teamId,
+    status: input.status,
+    level: input.level,
+  };
+  const rows = await queryProfilesForExport(filters);
+  const csv = toCsv(rows, input.columns);
+  const fileName = `employee-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  const now = new Date().toISOString();
+
+  const { data: report, error } = await admin
+    .from("employee_export_reports")
+    .insert({
+      status: readyState.status,
+      owner_role: readyState.owner,
+      next_action: readyState.nextAction,
+      filters,
+      columns: input.columns,
+      row_count: rows.length,
+      file_name: fileName,
+      requested_by: input.actor.id,
+      generated_at: now,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+
+  await writeAuditEvent({
+    actorUserId: input.actor.id,
+    action: "profile_export.requested",
+    entityType: "employee_export_report",
+    entityId: report.id,
+    fromStatus: null,
+    toStatus: requestedState.status,
+    metadata: { owner: requestedState.owner, nextAction: requestedState.nextAction, filters, columns: input.columns },
+  });
+  await writeAuditEvent({
+    actorUserId: input.actor.id,
+    action: "profile_export.generated",
+    entityType: "employee_export_report",
+    entityId: report.id,
+    fromStatus: generatingState.status,
+    toStatus: readyState.status,
+    metadata: { owner: readyState.owner, nextAction: readyState.nextAction, rowCount: rows.length, fileName },
+  });
+  await notifyEmployeeExportReady({
+    exportReportId: report.id,
+    status: readyState.status,
+    rowCount: rows.length,
+    fileName,
+  });
+
+  return { report, csv };
+}
+
 export async function getEmployeeProfile(id: string) {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.from("profiles").select(profileSelect).eq("id", id).single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+async function queryProfilesForExport(filters: {
+  search?: string;
+  businessUnitId?: string;
+  departmentId?: string;
+  teamId?: string;
+  status?: string;
+  level?: string;
+}) {
+  const admin = createSupabaseAdminClient();
+  let query = admin.from("profiles").select(profileSelect).order("employee_id", { ascending: true });
+  if (filters.businessUnitId) query = query.eq("business_unit_id", filters.businessUnitId);
+  if (filters.departmentId) query = query.eq("department_id", filters.departmentId);
+  if (filters.teamId) query = query.eq("team_id", filters.teamId);
+  if (filters.status) query = query.eq("account_status", filters.status);
+  if (filters.level) query = query.eq("level", filters.level);
+  if (filters.search) {
+    query = query.or(
+      `email.ilike.%${filters.search}%,employee_id.ilike.%${filters.search}%,display_name.ilike.%${filters.search}%,full_name_english.ilike.%${filters.search}%`,
+    );
+  }
+  const { data, error } = await query.limit(5000);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+function toCsv(rows: Array<Record<string, unknown>>, columns: string[]) {
+  const escape = (value: unknown) => {
+    const text = value == null ? "" : String(value);
+    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
+  return [
+    columns.map(escape).join(","),
+    ...rows.map((row) => columns.map((column) => escape(row[column])).join(",")),
+  ].join("\n");
 }
 
 export async function createEmployeeProfile(input: CreateEmployeeProfileInput) {
@@ -125,6 +242,10 @@ export async function createEmployeeProfile(input: CreateEmployeeProfileInput) {
       preferred_calendar: "jalali",
       preferred_locale: "fa-IR",
       date_display_timezone: "Asia/Tehran",
+      calendar_preference_status: "defaulted",
+      preferred_language: "fa",
+      text_direction: "rtl",
+      language_preference_status: "defaulted",
     })
     .select(profileSelect)
     .single();

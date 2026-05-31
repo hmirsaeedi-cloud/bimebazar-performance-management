@@ -18,6 +18,18 @@ URL: `https://omjblauittoyxknabrqg.supabase.co`
 `20260530100743_mpa_hr_admin_employee_approval_permission`
 `20260530105637_bulk_employee_import_via_excel`
 `20260530110306_process_engine_create_configure`
+`20260531124018_core_calendar_preferences`
+`20260531125134_core_language_preferences`
+`20260531125849_form_builder_return_and_visibility_audit`
+`20260531130428_bulk_employee_import_controls`
+`20260531130945_process_engine_version_lock_and_eligibility`
+`20260531131728_form_template_library`
+`20260531132343_employee_export_report`
+`20260531135631_mpa_approval_guards`
+`20260531140841_upward_self_assessment_process`
+`20260531155040_mpa_rich_text_editor`
+`20260531155709_downward_process_routing_chain`
+`20260531160203_mpa_auto_attach_to_evaluation`
 
 This created:
 
@@ -34,10 +46,14 @@ This created:
 - `public.form_template_versions`
 - `public.mpa_cycles`
 - `public.mpas`
+- `public.mpa_content_revisions`
+- `public.mpa_evaluation_attachments`
 - `public.employee_import_runs`
 - `public.employee_import_rows`
 - `public.performance_processes`
 - `public.process_participants`
+- `public.process_self_assessments`
+- `public.process_downward_evaluations`
 - `app_private.current_user_role()`
 - `app_private.current_user_has_role(target_role text)`
 - `app_private.active_direct_report_count(manager_user_id uuid)`
@@ -49,6 +65,25 @@ Profiles now default to Jalali calendar display:
 - `preferred_calendar = 'jalali'`
 - `preferred_locale = 'fa-IR'`
 - `date_display_timezone = 'Asia/Tehran'`
+- `calendar_preference_status = 'defaulted'`
+
+Core calendar preferences are guarded by:
+
+- `core.calendar.read`
+- `core.calendar.update`
+- `core.calendar.override`
+
+Profiles now default to Persian RTL display:
+
+- `preferred_language = 'fa'`
+- `text_direction = 'rtl'`
+- `language_preference_status = 'defaulted'`
+
+Core language preferences are guarded by:
+
+- `core.language.read`
+- `core.language.update`
+- `core.language.override`
 
 ## Environment
 

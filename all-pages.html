@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Local Pages</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 18px 48px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(2rem, 4vw, 3.4rem);
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+        gap: 14px;
+        margin-top: 24px;
+      }
+
+      a {
+        display: grid;
+        gap: 8px;
+        min-height: 126px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        color: inherit;
+        text-decoration: none;
+        box-shadow: 0 12px 32px rgba(22, 40, 48, 0.08);
+      }
+
+      a:hover {
+        border-color: var(--teal);
+      }
+
+      strong {
+        font-size: 1.08rem;
+      }
+
+      span {
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      @media (max-width: 720px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>BimeBazar Local Pages</h1>
+      <p>One place to open every temporary page created for the performance management scaffold.</p>
+
+      <section class="grid">
+        <a href="/index.html">
+          <strong>Roadmap</strong>
+          <span>Interactive 10-sprint roadmap from the PRD prioritization table.</span>
+        </a>
+        <a href="/temp-login.html">
+          <strong>Login</strong>
+          <span>Temporary Supabase login page for the HR Admin account.</span>
+        </a>
+        <a href="/temp-profiles.html">
+          <strong>Employee Profiles</strong>
+          <span>Manual profile creation with Jalali join date support.</span>
+        </a>
+        <a href="/temp-employee-export.html">
+          <strong>Employee Export</strong>
+          <span>Generate a filtered CSV report from employee profiles.</span>
+        </a>
+        <a href="/temp-calendar.html">
+          <strong>Calendar Settings</strong>
+          <span>Update Jalali/Gregorian display, locale, and timezone preferences.</span>
+        </a>
+        <a href="/temp-rtl.html">
+          <strong>Language + RTL</strong>
+          <span>Update Persian/English language and right-to-left display preferences.</span>
+        </a>
+        <a href="/temp-form-builder.html">
+          <strong>Form Builder</strong>
+          <span>Create and publish a form template with all question types.</span>
+        </a>
+        <a href="/temp-rbac.html">
+          <strong>RBAC Manager Sync</strong>
+          <span>Recompute automatic Manager roles from active direct reports.</span>
+        </a>
+        <a href="/temp-mpa.html">
+          <strong>MPA Workflow</strong>
+          <span>Create MPA cycles and move agreements through approval steps.</span>
+        </a>
+        <a href="/temp-bulk-import.html">
+          <strong>Bulk Employee Import</strong>
+          <span>Paste Excel/CSV rows, preview validation, and create employees.</span>
+        </a>
+        <a href="/temp-process-engine.html">
+          <strong>Process Engine</strong>
+          <span>Create, configure, start, pause, and complete performance processes.</span>
+        </a>
+        <a href="/temp-self-assessment.html">
+          <strong>Self-assessment</strong>
+          <span>Start employee self-assessment tasks and move them through manager review.</span>
+        </a>
+        <a href="/temp-downward-routing.html">
+          <strong>Downward Routing</strong>
+          <span>Route manager evaluations through next-level manager and HRBP review.</span>
+        </a>
+      </section>
+    </main>
+  </body>
+</html>

@@ -98,6 +98,8 @@
           <a href="/temp-form-builder.html">Forms</a>
           <a href="/temp-bulk-import.html" style="margin-left: 12px">Bulk import</a>
           <a href="/temp-mpa.html" style="margin-left: 12px">MPA</a>
+          <a href="/temp-self-assessment.html" style="margin-left: 12px">Self-assessment</a>
+          <a href="/temp-downward-routing.html" style="margin-left: 12px">Downward routing</a>
         </nav>
       </header>
 
@@ -249,6 +251,9 @@
 
       async function configureProcess(process) {
         const filter = process.eligibility_filter || {};
+        if (!process.form_template_version_id) throw new Error("Configure requires a selected form template version");
+        const [formVersion] = await supabaseFetch(`/rest/v1/form_template_versions?id=eq.${process.form_template_version_id}&select=id,version_number,schema`);
+        if (!formVersion) throw new Error("Selected form version was not found");
         let query = "/rest/v1/profiles?select=id,manager_id,team_id,level&account_status=eq.active";
         if (filter.teamIds?.length) query += `&team_id=in.(${filter.teamIds.join(",")})`;
         const participants = await supabaseFetch(query);
@@ -268,13 +273,33 @@
             metadata: { teamId: participant.team_id, level: participant.level },
           }))),
         });
-        await moveProcess(process.id, "configure", { participantCount: participants.length });
+        await supabaseFetch(`/rest/v1/performance_processes?id=eq.${process.id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            configured_at: new Date().toISOString(),
+            configured_participant_count: participants.length,
+            locked_form_template_version_id: formVersion.id,
+            locked_form_version_number: formVersion.version_number,
+            locked_form_schema: formVersion.schema,
+          }),
+        });
+        await moveProcess(process.id, "configure", {
+          participantCount: participants.length,
+          lockedFormTemplateVersionId: formVersion.id,
+          lockedFormVersionNumber: formVersion.version_number,
+        });
       }
 
       async function moveProcess(id, action, extraMetadata = {}) {
-        const [current] = await supabaseFetch(`/rest/v1/performance_processes?id=eq.${id}&select=*`);
+        const [current] = await supabaseFetch(`/rest/v1/performance_processes?id=eq.${id}&select=*,process_participants(id,status)`);
         const next = nextState(current.status, action);
         if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
+        if (action === "start") {
+          const eligibleCount = (current.process_participants || []).filter((participant) => participant.status !== "excluded").length;
+          if (!eligibleCount) throw new Error("Processes cannot start when org filters produce zero eligible employees");
+          if (!current.locked_form_template_version_id) throw new Error("Processes cannot start until a form version is locked during configuration");
+        }
         await supabaseFetch(`/rest/v1/performance_processes?id=eq.${id}`, {
           method: "PATCH",
           headers: { Prefer: "return=minimal" },
@@ -282,6 +307,7 @@
             status: next[0],
             owner_role: next[1],
             next_action: next[2],
+            started_at: action === "start" ? new Date().toISOString() : current.started_at,
             updated_by: currentUser.id,
             updated_at: new Date().toISOString(),
           }),
@@ -375,6 +401,7 @@
               eligibility_filter: config.eligibilityFilter,
               form_template_id: config.formTemplateId,
               form_template_version_id: config.formTemplateVersionId,
+              configured_participant_count: 0,
               starts_at: isoDateTime(document.querySelector("#startsAt").value),
               ends_at: isoDateTime(document.querySelector("#endsAt").value),
               created_by: currentUser.id,

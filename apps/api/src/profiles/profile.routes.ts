@@ -4,11 +4,13 @@ import { requirePermission } from "../middleware/rbac.js";
 import {
   createEmployeeProfileSchema,
   deactivateProfileSchema,
+  employeeExportReportSchema,
   listProfilesQuerySchema,
   updateEmployeeProfileSchema,
 } from "./profile.schemas.js";
 import {
   createEmployeeProfile,
+  createEmployeeExportReport,
   deactivateEmployeeProfile,
   getEmployeeProfile,
   listEmployeeProfiles,
@@ -32,6 +34,19 @@ profileRouter.get("/", requirePermission("profiles.read"), async (req, res, next
   try {
     const query = listProfilesQuerySchema.parse(req.query);
     res.json(await listEmployeeProfiles(query));
+  } catch (error) {
+    next(error);
+  }
+});
+
+profileRouter.post("/exports", requirePermission("profiles.export"), async (req, res, next) => {
+  try {
+    const input = employeeExportReportSchema.parse(req.body);
+    const { report, csv } = await createEmployeeExportReport({ actor: req.user!, ...input });
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${report.file_name}"`);
+    res.setHeader("X-Export-Report-Id", report.id);
+    res.status(201).send(csv);
   } catch (error) {
     next(error);
   }

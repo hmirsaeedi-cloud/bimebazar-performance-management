@@ -12,6 +12,7 @@ export type PermissionCode =
   | "profiles.create"
   | "profiles.update"
   | "profiles.deactivate"
+  | "profiles.export"
   | "profiles.bulk_import"
   | "profiles.import_read"
   | "org_units.read"
@@ -25,6 +26,7 @@ export type PermissionCode =
   | "forms.create"
   | "forms.update"
   | "forms.publish"
+  | "forms.return"
   | "forms.archive"
   | "mpa.read"
   | "mpa.create"
@@ -43,6 +45,12 @@ export type PermissionCode =
   | "process.pause"
   | "process.complete"
   | "process.cancel"
+  | "core.calendar.read"
+  | "core.calendar.update"
+  | "core.calendar.override"
+  | "core.language.read"
+  | "core.language.update"
+  | "core.language.override"
   | "storage.profile_documents.read"
   | "storage.profile_documents.write";
 

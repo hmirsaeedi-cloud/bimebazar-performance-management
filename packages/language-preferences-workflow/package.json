@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/language-preferences-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/languagePreferencesWorkflow.d.ts",
+      "default": "./src/languagePreferencesWorkflow.mjs"
+    }
+  }
+}

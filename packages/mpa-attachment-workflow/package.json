@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/mpa-attachment-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/mpaAttachmentWorkflow.d.ts",
+      "default": "./src/mpaAttachmentWorkflow.mjs"
+    }
+  }
+}

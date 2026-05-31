@@ -54,6 +54,41 @@ export const listProfilesQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
 
+export const employeeExportReportSchema = listProfilesQuerySchema
+  .omit({ page: true, pageSize: true })
+  .extend({
+    columns: z
+      .array(
+        z.enum([
+          "employee_id",
+          "email",
+          "full_name_english",
+          "full_name_persian",
+          "role_code",
+          "account_status",
+          "join_date",
+          "level",
+          "position_title",
+          "phone",
+          "preferred_calendar",
+          "preferred_language",
+        ]),
+      )
+      .min(1)
+      .max(20)
+      .default([
+        "employee_id",
+        "email",
+        "full_name_english",
+        "full_name_persian",
+        "role_code",
+        "account_status",
+        "join_date",
+        "level",
+        "position_title",
+      ]),
+  });
+
 export const deactivateProfileSchema = z.object({
   reason: z.string().min(8).max(500),
   exitDate: calendarDateSchema.optional(),

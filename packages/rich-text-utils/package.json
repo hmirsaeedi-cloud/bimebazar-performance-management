@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/rich-text-utils",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/richText.d.ts",
+      "default": "./src/richText.mjs"
+    }
+  }
+}

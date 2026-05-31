@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Self-assessment</title>
+    <style>
+      :root {
+        --bg: #f5f8f7;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #5c6b73;
+        --line: #d8e1e5;
+        --teal: #0c7c7c;
+        --gold: #c48922;
+        --danger: #b13d3a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { max-width: 1180px; margin: 0 auto; padding: 28px 18px 48px; }
+      header, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; }
+      p { margin: 0; color: var(--muted); }
+      section {
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: var(--panel);
+        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      }
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(170px, 1fr)); gap: 12px; }
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 750;
+      }
+      input, select, textarea {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        color: var(--ink);
+        font: inherit;
+      }
+      textarea { min-height: 92px; resize: vertical; }
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--teal);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+      }
+      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+      button.warning { background: var(--gold); }
+      button.danger { background: var(--danger); }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 0.78rem; }
+      .pill {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #e8f4f2;
+        color: #075b5b;
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+      .muted { margin-top: 4px; color: var(--muted); font-size: 0.75rem; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      @media (max-width: 860px) {
+        header, .toolbar { align-items: stretch; flex-direction: column; }
+        .grid { grid-template-columns: 1fr; }
+        table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Upward Process: Self-assessment</h1>
+          <p>Start employee self-assessment tasks from active processes and move submissions through manager review.</p>
+        </div>
+        <nav>
+          <a href="/temp-process-engine.html">Process engine</a>
+          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Start Employee Task</h2>
+        <form id="startForm" class="grid">
+          <label>Active Self-assessment Process<select id="processId"></select></label>
+          <label>Eligible Participant<select id="participantId"></select></label>
+          <button type="submit">Start self-assessment</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Self-assessments</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Process</th>
+              <th>Status</th>
+              <th>Owner</th>
+              <th>Next Action</th>
+              <th>Visibility</th>
+              <th>Move</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let processes = [];
+      let participants = [];
+      let profiles = [];
+      let selfAssessments = [];
+
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function fillSelect(select, options, label, render) {
+        select.innerHTML = `<option value="">${label}</option>` + options.map((item) => `<option value="${item.id}">${render(item)}</option>`).join("");
+      }
+
+      async function writeAudit(action, entityId, targetUserId, fromStatus, toStatus, metadata, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: targetUserId,
+            action,
+            entity_type: "process_self_assessment",
+            entity_id: entityId,
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata,
+          }),
+        });
+      }
+
+      function nextState(status, action) {
+        const table = {
+          in_progress: { submit: ["submitted", "MANAGER", "manager_approve"] },
+          submitted: { return: ["returned", "EMPLOYEE", "submit"], approve: ["manager_approved", "HRBP", "complete"] },
+          returned: { submit: ["submitted", "MANAGER", "manager_approve"] },
+          manager_approved: { complete: ["completed", "SYSTEM", null] },
+        };
+        return table[status]?.[action];
+      }
+
+      async function loadData() {
+        [processes, profiles] = await Promise.all([
+          supabaseFetch("/rest/v1/performance_processes?process_type=eq.self_assessment&status=eq.active&select=*&order=created_at.desc"),
+          supabaseFetch("/rest/v1/profiles?select=id,display_name,email&order=display_name"),
+        ]);
+        fillSelect(document.querySelector("#processId"), processes, "Select active process", (item) => item.name);
+        await loadParticipants();
+        await loadSelfAssessments();
+      }
+
+      async function loadParticipants() {
+        const processId = document.querySelector("#processId").value || processes[0]?.id || "";
+        if (processId) document.querySelector("#processId").value = processId;
+        participants = processId
+          ? await supabaseFetch(`/rest/v1/process_participants?process_id=eq.${processId}&status=neq.excluded&select=id,employee_id,manager_id,status,metadata&order=created_at.desc`)
+          : [];
+        fillSelect(document.querySelector("#participantId"), participants, "Select eligible employee", (item) => {
+          const profile = profiles.find((profileItem) => profileItem.id === item.employee_id);
+          return `${profile?.display_name || item.employee_id} - ${item.status}`;
+        });
+      }
+
+      async function loadSelfAssessments() {
+        selfAssessments = await supabaseFetch("/rest/v1/process_self_assessments?select=*&order=updated_at.desc");
+        countLabel.textContent = `${selfAssessments.length} self-assessment${selfAssessments.length === 1 ? "" : "s"}`;
+        rows.innerHTML = selfAssessments.map((item) => {
+          const profile = profiles.find((profileItem) => profileItem.id === item.employee_id);
+          const process = processes.find((processItem) => processItem.id === item.process_id);
+          return `
+            <tr>
+              <td>${profile?.display_name || item.employee_id}</td>
+              <td>${process?.name || item.process_id}</td>
+              <td>
+                <span class="pill">${item.status}</span>
+                ${item.last_return_reason ? `<div class="muted">Returned: ${item.last_return_reason}</div>` : ""}
+              </td>
+              <td>${item.owner_role}</td>
+              <td>${item.next_action || ""}</td>
+              <td>${item.visibility?.employeeCanViewManagerReview ? "Manager review visible" : "Employee review hidden"}</td>
+              <td class="actions">${renderActions(item)}</td>
+            </tr>
+          `;
+        }).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => {
+          button.addEventListener("click", () => moveSelfAssessment(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error")));
+        });
+      }
+
+      function renderActions(item) {
+        const actions = {
+          in_progress: [["submit", "Submit"]],
+          returned: [["submit", "Resubmit"]],
+          submitted: [["approve", "Manager approve"], ["return", "Return"], ["visibility", "Show review"]],
+          manager_approved: [["complete", "Complete"], ["return", "Return"], ["visibility", "Show review"]],
+        }[item.status] || [];
+        return actions.map(([action, label]) => `<button data-id="${item.id}" data-action="${action}" class="${action === "return" ? "warning" : ""}">${label}</button>`).join("");
+      }
+
+      async function moveSelfAssessment(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/process_self_assessments?id=eq.${id}&select=*`);
+        if (action === "visibility") {
+          const visibility = {
+            ...current.visibility,
+            employeeCanViewManagerReview: true,
+          };
+          await supabaseFetch(`/rest/v1/process_self_assessments?id=eq.${id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ visibility, updated_by: currentUser.id, updated_at: new Date().toISOString() }),
+          });
+          await writeAudit("process.self_assessment.visibility_changed", id, current.employee_id, current.status, current.status, {
+            owner: current.owner_role,
+            nextAction: current.next_action,
+            processId: current.process_id,
+            from: current.visibility,
+            to: visibility,
+          });
+          showMessage("Visibility changed and audited.", "success");
+          await loadSelfAssessments();
+          return;
+        }
+        const next = nextState(current.status, action);
+        if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
+        const now = new Date().toISOString();
+        const reason = action === "return" ? prompt("Why is this self-assessment returned?", "Please add more detail before manager approval.") : null;
+        const responses = action === "submit"
+          ? {
+              achievements: "Completed core goals and documented evidence.",
+              challenges: "Need clearer cross-team handoff expectations.",
+              growthPlan: "Focus on communication cadence and ownership clarity.",
+            }
+          : current.responses;
+        await supabaseFetch(`/rest/v1/process_self_assessments?id=eq.${id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            status: next[0],
+            owner_role: next[1],
+            next_action: next[2],
+            responses,
+            submitted_at: action === "submit" ? now : current.submitted_at,
+            returned_at: action === "return" ? now : current.returned_at,
+            manager_approved_at: action === "approve" ? now : current.manager_approved_at,
+            completed_at: action === "complete" ? now : current.completed_at,
+            last_return_reason: action === "return" ? reason : current.last_return_reason,
+            updated_by: currentUser.id,
+            updated_at: now,
+          }),
+        });
+        await writeAudit(`process.self_assessment.${action === "approve" ? "approved" : `${action}ed`}`, id, current.employee_id, current.status, next[0], {
+          owner: next[1],
+          nextAction: next[2],
+          processId: current.process_id,
+          responseKeys: Object.keys(responses || {}),
+        }, reason);
+        showMessage(`Self-assessment moved to ${next[0]}.`, "success");
+        await loadSelfAssessments();
+      }
+
+      document.querySelector("#processId").addEventListener("change", () => loadParticipants().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#refreshButton").addEventListener("click", () => loadData().catch((error) => showMessage(error.message, "error")));
+
+      document.querySelector("#startForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const process = processes.find((item) => item.id === document.querySelector("#processId").value);
+          const participant = participants.find((item) => item.id === document.querySelector("#participantId").value);
+          if (!process) throw new Error("Select an active self-assessment process first.");
+          if (!participant) throw new Error("Select an eligible participant first.");
+          if (!process.locked_form_template_version_id || !process.locked_form_schema) {
+            throw new Error("Process must be configured with a locked form version before self-assessments can start.");
+          }
+          const existing = await supabaseFetch(`/rest/v1/process_self_assessments?process_id=eq.${process.id}&employee_id=eq.${participant.employee_id}&select=id,status`);
+          if (existing.length) throw new Error(`This employee already has a ${existing[0].status} self-assessment for this process.`);
+          const id = crypto.randomUUID();
+          await supabaseFetch("/rest/v1/process_self_assessments", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              id,
+              process_id: process.id,
+              participant_id: participant.id,
+              employee_id: participant.employee_id,
+              manager_id: participant.manager_id,
+              form_template_version_id: process.locked_form_template_version_id,
+              locked_form_schema: process.locked_form_schema,
+              status: "in_progress",
+              owner_role: "EMPLOYEE",
+              next_action: "submit",
+              responses: {},
+              visibility: {
+                employeeCanViewManagerReview: false,
+                managerCanViewEmployeeDraft: false,
+              },
+              created_by: currentUser.id,
+              updated_by: currentUser.id,
+            }),
+          });
+          await supabaseFetch(`/rest/v1/process_participants?id=eq.${participant.id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ status: "in_progress", updated_at: new Date().toISOString() }),
+          });
+          await writeAudit("process.self_assessment.created", id, participant.employee_id, null, "in_progress", {
+            owner: "EMPLOYEE",
+            nextAction: "submit",
+            processId: process.id,
+            lockedFormTemplateVersionId: process.locked_form_template_version_id,
+            lockedFormVersionNumber: process.locked_form_version_number,
+          });
+          showMessage("Self-assessment started.", "success");
+          await loadData();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadData();
+        } catch (error) {
+          showMessage(error.message, "error");
+          countLabel.textContent = "Could not load self-assessments";
+        }
+      })();
+    </script>
+  </body>
+</html>

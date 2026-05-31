@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requirePermission } from "../middleware/rbac.js";
-import { createMpaCycleSchema, createMpaSchema, listMpasQuerySchema, mpaDecisionSchema, updateMpaSchema } from "./mpa.schemas.js";
-import { createMpa, createMpaCycle, getMpa, listMpaCycles, listMpas, moveMpa, updateMpa } from "./mpa.service.js";
+import { autoAttachMpaSchema, createMpaCycleSchema, createMpaSchema, listMpasQuerySchema, mpaDecisionSchema, updateMpaSchema } from "./mpa.schemas.js";
+import { autoAttachMpaToEvaluation, createMpa, createMpaCycle, getMpa, listMpaCycles, listMpas, moveMpa, updateMpa } from "./mpa.service.js";
 
 export const mpaRouter = Router();
 
@@ -35,6 +35,15 @@ mpaRouter.post("/", requirePermission("mpa.create"), async (req, res, next) => {
   try {
     const input = createMpaSchema.parse(req.body);
     res.status(201).json({ mpa: await createMpa({ actor: req.user!, ...input }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+mpaRouter.post("/attachments/auto", requirePermission("mpa.attach"), async (req, res, next) => {
+  try {
+    const input = autoAttachMpaSchema.parse(req.body);
+    res.status(201).json({ attachment: await autoAttachMpaToEvaluation({ actor: req.user!, ...input }) });
   } catch (error) {
     next(error);
   }

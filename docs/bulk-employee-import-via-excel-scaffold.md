@@ -12,6 +12,7 @@ Score: 13
 - `public.employee_import_runs` tracks one uploaded file/import attempt.
 - `public.employee_import_rows` tracks validation and creation result per row.
 - Import rows keep both `raw_data` and `normalized_data` for auditability.
+- Import runs store `dry_run`, `submitted_at`, and `validation_summary` for operational review.
 - Import statuses:
   - `uploaded`
   - `validating`
@@ -27,11 +28,13 @@ Score: 13
 - `GET /profiles/employee-imports` requires `profiles.import_read`.
 - `POST /profiles/employee-imports/preview` requires `profiles.bulk_import`.
 - `POST /profiles/employee-imports/process` requires `profiles.bulk_import`.
+- `POST /profiles/employee-imports/:id/cancel` requires `profiles.bulk_import`.
 - Validation checks:
   - Required employee identity fields.
   - Jalali or Gregorian join date.
   - Existing business unit, department, and team.
   - Existing manager email when provided.
+  - Manager email cannot equal employee email.
   - Duplicate emails and employee IDs, both in the database and within the import file.
 
 ## 3. State Machine Config
@@ -52,12 +55,15 @@ State lives in `packages/bulk-import-workflow`:
 - Temporary local page: `/temp-bulk-import.html`.
 - Template file: `/employee-import-template.csv`, which opens cleanly in Excel.
 - The temporary page supports paste-from-Excel CSV, preview validation, and direct import into Supabase.
+- Recent validated or failed-validation runs can be cancelled from the temporary page.
 
 ## 5. Audit Log And Notifications Hooks
 
 - Import run status changes write audit events.
+- Import submissions write `employee_import.submitted`.
+- Cancelled imports write `employee_import.cancelled`.
 - Each created employee writes `profile.created_from_bulk_import`.
-- Later notification delivery can trigger from completed imports and generated temporary passwords.
+- `notifyEmployeeImportCompleted` can later trigger completion summaries, and generated temporary passwords continue through `notifyUserCreated`.
 
 ## 6. Tests And Seed Data
 
@@ -67,5 +73,5 @@ State lives in `packages/bulk-import-workflow`:
 ## Acceptance Criteria Mapping
 
 - Role permissions are enforced for every bulk import route and action.
-- Import run creation, validation result, processing result, and employee creation write audit events.
+- Import submission, validation result, processing result, cancellation, and employee creation write audit events.
 - State transitions are represented as explicit `status`, `owner`, and `nextAction` values.

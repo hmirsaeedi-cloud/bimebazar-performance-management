@@ -8,6 +8,7 @@ export const managerRoleActions = Object.freeze({
   DIRECT_REPORT_ADDED: "direct_report_added",
   DIRECT_REPORT_REMOVED: "direct_report_removed",
   RESYNC_MANAGER_ROLE: "resync_manager_role",
+  OVERRIDE_MANAGER_ROLE: "override_manager_role",
 });
 
 export const managerRoleWorkflow = Object.freeze({
@@ -17,6 +18,7 @@ export const managerRoleWorkflow = Object.freeze({
     transitions: {
       [managerRoleActions.DIRECT_REPORT_ADDED]: managerRoleStatuses.ACTIVE_MANAGER,
       [managerRoleActions.RESYNC_MANAGER_ROLE]: managerRoleStatuses.NOT_MANAGER,
+      [managerRoleActions.OVERRIDE_MANAGER_ROLE]: managerRoleStatuses.ACTIVE_MANAGER,
     },
   },
   [managerRoleStatuses.ACTIVE_MANAGER]: {
@@ -25,6 +27,7 @@ export const managerRoleWorkflow = Object.freeze({
     transitions: {
       [managerRoleActions.DIRECT_REPORT_REMOVED]: managerRoleStatuses.REVOKED_MANAGER,
       [managerRoleActions.RESYNC_MANAGER_ROLE]: managerRoleStatuses.ACTIVE_MANAGER,
+      [managerRoleActions.OVERRIDE_MANAGER_ROLE]: managerRoleStatuses.ACTIVE_MANAGER,
     },
   },
   [managerRoleStatuses.REVOKED_MANAGER]: {
@@ -33,6 +36,7 @@ export const managerRoleWorkflow = Object.freeze({
     transitions: {
       [managerRoleActions.DIRECT_REPORT_ADDED]: managerRoleStatuses.ACTIVE_MANAGER,
       [managerRoleActions.RESYNC_MANAGER_ROLE]: managerRoleStatuses.REVOKED_MANAGER,
+      [managerRoleActions.OVERRIDE_MANAGER_ROLE]: managerRoleStatuses.ACTIVE_MANAGER,
     },
   },
 });

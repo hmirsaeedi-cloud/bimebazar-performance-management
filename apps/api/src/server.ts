@@ -4,6 +4,7 @@ import express from "express";
 import type { ErrorRequestHandler } from "express";
 import helmet from "helmet";
 import { authRouter } from "./auth/auth.routes.js";
+import { coreRouter } from "./core/calendar.routes.js";
 import { formRouter } from "./forms/form.routes.js";
 import { attachSession } from "./middleware/session.js";
 import { mpaRouter } from "./mpa/mpa.routes.js";
@@ -26,6 +27,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/core", coreRouter);
 app.use("/forms", formRouter);
 app.use("/mpas", mpaRouter);
 app.use("/processes", processRouter);

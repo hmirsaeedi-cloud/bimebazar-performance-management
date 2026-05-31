@@ -12,6 +12,8 @@ Score: 13
 - `public.performance_processes` stores the process definition, JSON config, eligibility filter, form version pointers, schedule, and workflow state.
 - `public.process_participants` stores the resolved employees for a configured process.
 - Processes keep `form_template_version_id`, so in-flight processes retain the exact form version even after later template edits.
+- Configuration locks `locked_form_template_version_id`, `locked_form_version_number`, and `locked_form_schema` as a snapshot for in-flight process safety.
+- `configured_participant_count`, `configured_at`, and `started_at` support audit and operational review.
 
 ## 2. API Routes, Validation, And RBAC Middleware
 
@@ -25,6 +27,10 @@ Score: 13
 - `POST /processes/:id/resume` requires `process.start`.
 - `POST /processes/:id/complete` requires `process.complete`.
 - `POST /processes/:id/cancel` requires `process.cancel`.
+
+- Configure requires a selected form template version.
+- Start re-checks participant count and refuses to start when no non-excluded participants exist.
+- Selected form template version must belong to the selected form template.
 
 ## 3. State Machine Config
 
@@ -42,11 +48,14 @@ State lives in `packages/process-engine-workflow`:
 
 - Temporary local page: `/temp-process-engine.html`.
 - It can create draft processes, resolve eligible employees, configure participants, and move processes through the engine.
+- It displays participant count and locks the selected form version when configuring.
 
 ## 5. Audit Log And Notifications Hooks
 
 - API service writes audit events for create, update, configure, schedule, start, pause, resume, complete, and cancel.
+- Visibility config changes also write `process.visibility_changed`.
 - Audit metadata includes `owner`, `nextAction`, process type, and participant count where relevant.
+- `notifyProcessChanged` can later drive in-app/email process notifications.
 
 ## 6. Tests And Seed Data
 
@@ -58,3 +67,5 @@ State lives in `packages/process-engine-workflow`:
 - Role permissions are enforced for every Process route and action.
 - Every create, update, configure, submit/start, approve/equivalent, return/equivalent, override/cancel, and visibility-sensitive change writes an audit event.
 - State transitions are represented as explicit `status`, `owner`, and `nextAction` values.
+- Processes cannot start when org filters produce zero eligible employees.
+- In-flight processes keep their selected form version through the locked form snapshot.

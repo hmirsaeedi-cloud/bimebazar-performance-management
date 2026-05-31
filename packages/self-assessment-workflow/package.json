@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/self-assessment-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/selfAssessmentWorkflow.d.ts",
+      "default": "./src/selfAssessmentWorkflow.mjs"
+    }
+  }
+}

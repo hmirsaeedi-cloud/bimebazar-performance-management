@@ -393,6 +393,7 @@ new.employee@bimebazar.com,BB-1001,نام کارمند,New Employee,1403-01-15,D
           }
           const managerId = row.managerEmail ? managerByEmail.get(String(row.managerEmail).toLowerCase()) : null;
           if (row.managerEmail && !managerId) errors.push("Manager email not found");
+          if (row.managerEmail && String(row.managerEmail).toLowerCase() === email) errors.push("Manager email cannot match employee email");
           return {
             rowNumber: index + 2,
             raw: row,
@@ -404,6 +405,7 @@ new.employee@bimebazar.com,BB-1001,نام کارمند,New Employee,1403-01-15,D
               departmentId: department?.id,
               teamId: team?.id,
               managerId,
+              importAction: "create",
             },
             status: errors.length ? "invalid" : "valid",
             errors,
@@ -470,9 +472,20 @@ new.employee@bimebazar.com,BB-1001,نام کارمند,New Employee,1403-01-15,D
             total_rows: preview.totalRows,
             valid_rows: preview.validRows,
             invalid_rows: preview.invalidRows,
+            dry_run: false,
+            submitted_at: new Date().toISOString(),
+            validation_summary: {
+              errorsByRow: preview.rows.filter((row) => row.errors.length).map((row) => ({ rowNumber: row.rowNumber, errors: row.errors })),
+            },
             created_by: currentUser.id,
             started_at: new Date().toISOString(),
           }),
+        });
+        await writeAudit("employee_import.submitted", "employee_import_run", runId, null, "uploaded", {
+          owner: "HR_ADMIN",
+          nextAction: "validate",
+          sourceFilename,
+          totalRows: preview.totalRows,
         });
         await supabaseFetch("/rest/v1/employee_import_rows", {
           method: "POST",
@@ -537,6 +550,10 @@ new.employee@bimebazar.com,BB-1001,نام کارمند,New Employee,1403-01-15,D
                 preferred_calendar: "jalali",
                 preferred_locale: "fa-IR",
                 date_display_timezone: "Asia/Tehran",
+                calendar_preference_status: "defaulted",
+                preferred_language: "fa",
+                text_direction: "rtl",
+                language_preference_status: "defaulted",
               }),
             });
             await supabaseFetch(`/rest/v1/employee_import_rows?import_run_id=eq.${runId}&row_number=eq.${row.rowNumber}`, {
@@ -593,9 +610,38 @@ new.employee@bimebazar.com,BB-1001,نام کارمند,New Employee,1403-01-15,D
             <td>${run.total_rows}</td>
             <td>${run.created_count}</td>
             <td>${run.error_count + run.invalid_rows}</td>
-            <td>${new Date(run.created_at).toLocaleString()}</td>
+            <td>
+              ${new Date(run.created_at).toLocaleString()}
+              ${["validated", "failed_validation"].includes(run.status) ? `<br /><button data-cancel-run="${run.id}">Cancel</button>` : ""}
+            </td>
           </tr>
         `).join("");
+        document.querySelectorAll("[data-cancel-run]").forEach((button) => {
+          button.addEventListener("click", () => cancelRun(button.dataset.cancelRun).catch((error) => showMessage(error.message, "error")));
+        });
+      }
+
+      async function cancelRun(runId) {
+        const [run] = await supabaseFetch(`/rest/v1/employee_import_runs?id=eq.${runId}&select=*`);
+        await supabaseFetch(`/rest/v1/employee_import_runs?id=eq.${runId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            status: "cancelled",
+            owner_role: "SYSTEM",
+            next_action: null,
+            completed_at: new Date().toISOString(),
+          }),
+        });
+        await writeAudit("employee_import.cancelled", "employee_import_run", runId, run.status, "cancelled", {
+          owner: "SYSTEM",
+          nextAction: null,
+          totalRows: run.total_rows,
+          validRows: run.valid_rows,
+          invalidRows: run.invalid_rows,
+        });
+        showMessage("Import run cancelled.", "success");
+        await loadRuns();
       }
 
       document.querySelector("#previewButton").addEventListener("click", () => {

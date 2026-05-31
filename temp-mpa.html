@@ -119,10 +119,47 @@
         font-weight: 800;
       }
 
+      .muted {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
       .actions {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+      }
+
+      .editor-shell {
+        grid-column: 1 / -1;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff;
+      }
+
+      .editor-toolbar {
+        display: flex;
+        gap: 6px;
+        padding: 8px;
+        border-bottom: 1px solid var(--line);
+        background: #f8fbfa;
+      }
+
+      .editor-toolbar button {
+        min-height: 32px;
+        padding: 0 10px;
+        background: #fff;
+        border: 1px solid var(--line);
+        color: var(--ink);
+      }
+
+      .rich-editor {
+        min-height: 180px;
+        padding: 14px;
+        outline: none;
+        line-height: 1.6;
       }
 
       .message {
@@ -175,6 +212,19 @@
           <label>Goal<input id="goalTitle" value="Improve claim conversion" required /></label>
           <label>Measure<input id="goalMeasure" value="Increase qualified conversion by 10%" required /></label>
           <label>Weight<input id="goalWeight" type="number" value="40" min="0" max="100" /></label>
+          <div class="editor-shell">
+            <div class="editor-toolbar" aria-label="MPA editor toolbar">
+              <button type="button" data-command="bold">B</button>
+              <button type="button" data-command="italic">I</button>
+              <button type="button" data-command="underline">U</button>
+              <button type="button" data-command="insertUnorderedList">List</button>
+            </div>
+            <div id="richEditor" class="rich-editor" contenteditable="true">
+              <h3>Manager notes</h3>
+              <p><strong>Goal context:</strong> improve claim conversion while keeping service quality stable.</p>
+              <ul><li>Clarify monthly evidence.</li><li>Review progress in 1:1 meetings.</li></ul>
+            </div>
+          </div>
           <button type="submit">Create draft MPA</button>
           <button class="secondary" id="refreshButton" type="button">Refresh</button>
         </form>
@@ -340,19 +390,22 @@
       }
 
       async function loadMpas() {
-        const mpas = await supabaseFetch("/rest/v1/mpas?select=id,title,employee_id,cycle_id,status,owner_role,next_action,content&order=updated_at.desc");
+        const mpas = await supabaseFetch("/rest/v1/mpas?select=id,title,employee_id,cycle_id,status,owner_role,next_action,content_format,content_plain_text,approval_visibility,last_return_reason,content&order=updated_at.desc");
         countLabel.textContent = `${mpas.length} MPA${mpas.length === 1 ? "" : "s"}`;
         rows.innerHTML = mpas.map((mpa) => {
           const employee = profiles.find((profile) => profile.id === mpa.employee_id);
           const cycle = cycles.find((item) => item.id === mpa.cycle_id);
           return `
             <tr>
-              <td>${mpa.title}</td>
+              <td>${mpa.title}${mpa.content_format === "rich_text" ? `<div class="muted">Rich text: ${mpa.content_plain_text?.slice(0, 80) || "Draft content"}</div>` : ""}</td>
               <td>${employee?.display_name || mpa.employee_id}</td>
               <td>${cycle?.name || mpa.cycle_id}</td>
-              <td><span class="pill">${mpa.status}</span></td>
+              <td>
+                <span class="pill">${mpa.status}</span>
+                ${mpa.last_return_reason ? `<div class="muted">Returned: ${mpa.last_return_reason}</div>` : ""}
+              </td>
               <td>${mpa.owner_role}</td>
-              <td>${mpa.next_action || ""}</td>
+              <td>${mpa.next_action || ""}${mpa.approval_visibility?.employeeCanViewManagerContent ? `<div class="muted">Visible to employee</div>` : ""}</td>
               <td class="actions">${renderActions(mpa)}</td>
             </tr>
           `;
@@ -392,6 +445,14 @@
         const next = nextState(current.status, action);
         if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
         const now = new Date().toISOString();
+        const reason = action === "return" ? prompt("Why is this MPA being returned?", "Needs revision before approval") : null;
+        const visibilityBefore = current.approval_visibility || {
+          employeeCanViewManagerContent: false,
+          employeeCanViewHrbpNotes: false,
+        };
+        const visibilityAfter = action === "activate"
+          ? { ...visibilityBefore, employeeCanViewManagerContent: true }
+          : visibilityBefore;
         const timestamp = {
           submit: { submitted_at: now },
           employee_approve: { employee_approved_at: now },
@@ -409,6 +470,8 @@
             next_action: next[2],
             updated_by: currentUser.id,
             updated_at: now,
+            ...(action === "activate" ? { approval_visibility: visibilityAfter } : {}),
+            ...(action === "return" ? { last_return_reason: reason } : {}),
             ...timestamp,
           }),
         });
@@ -416,7 +479,16 @@
           owner: next[1],
           nextAction: next[2],
           cycleId: current.cycle_id,
-        });
+        }, reason);
+        if (JSON.stringify(visibilityBefore) !== JSON.stringify(visibilityAfter)) {
+          await writeAuditEvent("mpa.visibility_changed", id, current.employee_id, current.status, next[0], {
+            owner: next[1],
+            nextAction: next[2],
+            cycleId: current.cycle_id,
+            from: visibilityBefore,
+            to: visibilityAfter,
+          });
+        }
         showMessage(`MPA moved to ${next[0]}.`, "success");
         await loadMpas();
       }
@@ -448,13 +520,21 @@
         event.preventDefault();
         try {
           const employee = profiles.find((profile) => profile.id === document.querySelector("#employeeId").value);
+          if (!employee) throw new Error("Select an employee first.");
+          const cycleId = document.querySelector("#cycleId").value;
+          if (!cycleId) throw new Error("Select an MPA cycle first.");
+          const existing = await supabaseFetch(`/rest/v1/mpas?employee_id=eq.${employee.id}&cycle_id=eq.${cycleId}&status=neq.archived&select=id,title,status`);
+          if (existing.length > 0) {
+            throw new Error(`This employee already has a ${existing[0].status} MPA for this cycle. Archive it before creating a replacement.`);
+          }
           const mpaId = crypto.randomUUID();
+          const richText = createRichTextPayload(document.querySelector("#richEditor").innerHTML);
           const payload = {
             id: mpaId,
             employee_id: employee.id,
             manager_id: employee.manager_id || currentUser.id,
             hrbp_id: employee.hrbp_id || null,
-            cycle_id: document.querySelector("#cycleId").value,
+            cycle_id: cycleId,
             title: document.querySelector("#title").value,
             content: {
               goals: [{
@@ -463,10 +543,23 @@
                 weight: Number(document.querySelector("#goalWeight").value || 0),
               }],
               developmentActions: [],
+              richText,
+              sections: [{
+                id: "manager_notes",
+                title: "Manager notes",
+                html: richText.html,
+                plainText: richText.plainText,
+              }],
             },
+            content_format: "rich_text",
+            content_plain_text: richText.plainText,
             status: "draft",
             owner_role: "MANAGER",
             next_action: "submit",
+            approval_visibility: {
+              employeeCanViewManagerContent: false,
+              employeeCanViewHrbpNotes: false,
+            },
             created_by: currentUser.id,
             updated_by: currentUser.id,
           };
@@ -475,10 +568,23 @@
             headers: { Prefer: "return=minimal" },
             body: JSON.stringify(payload),
           });
+          await supabaseFetch("/rest/v1/mpa_content_revisions", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              mpa_id: mpaId,
+              revision_number: 1,
+              content: payload.content,
+              content_format: "rich_text",
+              content_plain_text: richText.plainText,
+              created_by: currentUser.id,
+            }),
+          });
           await writeAuditEvent("mpa.created", mpaId, employee.id, null, "draft", {
             owner: "MANAGER",
             nextAction: "submit",
             cycleId: payload.cycle_id,
+            contentFormat: "rich_text",
           });
           showMessage("Draft MPA created.", "success");
           await loadMpas();
@@ -488,6 +594,37 @@
       });
 
       document.querySelector("#refreshButton").addEventListener("click", () => loadData().catch((error) => showMessage(error.message, "error")));
+      document.querySelectorAll("[data-command]").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.execCommand(button.dataset.command, false, null);
+          document.querySelector("#richEditor").focus();
+        });
+      });
+
+      function stripUnsafeHtml(html) {
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        template.content.querySelectorAll("script, style").forEach((node) => node.remove());
+        template.content.querySelectorAll("*").forEach((node) => {
+          [...node.attributes].forEach((attribute) => {
+            if (attribute.name.startsWith("on") || attribute.name === "style") node.removeAttribute(attribute.name);
+          });
+        });
+        return template.innerHTML;
+      }
+
+      function createRichTextPayload(html) {
+        const safeHtml = stripUnsafeHtml(html);
+        const template = document.createElement("template");
+        template.innerHTML = safeHtml;
+        const plainText = template.content.textContent.replace(/\s+/g, " ").trim();
+        return {
+          format: "rich_text",
+          html: safeHtml,
+          plainText,
+          wordCount: plainText ? plainText.split(/\s+/).length : 0,
+        };
+      }
 
       (async function init() {
         try {

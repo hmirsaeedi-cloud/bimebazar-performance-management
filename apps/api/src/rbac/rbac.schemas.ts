@@ -11,3 +11,7 @@ export const assignRoleSchema = z.object({
 export const revokeRoleSchema = z.object({
   reason: z.string().min(8).max(500),
 });
+
+export const syncManagerRolesSchema = z.object({
+  reason: z.string().min(8).max(500).default("Manual HR Admin manager-role resync"),
+});

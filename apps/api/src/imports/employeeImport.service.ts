@@ -7,7 +7,7 @@ import {
 import { profileStatuses } from "@bimebazar/profile-workflow";
 import { randomUUID } from "node:crypto";
 import { writeAuditEvent } from "../audit/audit.service.js";
-import { notifyUserCreated } from "../notifications/notification.service.js";
+import { notifyEmployeeImportCompleted, notifyUserCreated } from "../notifications/notification.service.js";
 import { syncComputedManagerRole } from "../rbac/managerRole.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 import type { AuthUser } from "../auth/auth.types.js";
@@ -62,6 +62,9 @@ export async function processEmployeeImport(input: ImportInput) {
       total_rows: input.rows.length,
       valid_rows: validation.validRows,
       invalid_rows: validation.invalidRows,
+      dry_run: input.dryRun ?? false,
+      submitted_at: new Date().toISOString(),
+      validation_summary: buildValidationSummary(validation.rows),
       created_by: input.actor.id,
       started_at: new Date().toISOString(),
     })
@@ -70,7 +73,12 @@ export async function processEmployeeImport(input: ImportInput) {
   if (runError || !run) throw new Error(runError?.message ?? "Could not create import run");
 
   await writeImportRows(run.id, validation.rows);
-  await writeImportAudit(input.actor, run.id, null, validationDone.status, validationDone, {
+  await writeImportAudit(input.actor, run.id, null, uploadedState.status, uploadedState, {
+    sourceFilename: input.sourceFilename,
+    totalRows: input.rows.length,
+    dryRun: input.dryRun ?? false,
+  }, "employee_import.submitted");
+  await writeImportAudit(input.actor, run.id, uploadedState.status, validationDone.status, validationDone, {
     sourceFilename: input.sourceFilename,
     totalRows: input.rows.length,
     validRows: validation.validRows,
@@ -79,6 +87,13 @@ export async function processEmployeeImport(input: ImportInput) {
   });
 
   if (input.dryRun || validation.invalidRows > 0) {
+    await notifyEmployeeImportCompleted({
+      importRunId: run.id,
+      status: validationDone.status,
+      totalRows: input.rows.length,
+      createdCount: 0,
+      errorCount: 0,
+    });
     return getImportRun(run.id);
   }
 
@@ -125,8 +140,37 @@ export async function processEmployeeImport(input: ImportInput) {
     createdCount,
     errorCount,
   });
+  await notifyEmployeeImportCompleted({
+    importRunId: run.id,
+    status: completedState.status,
+    totalRows: input.rows.length,
+    createdCount,
+    errorCount,
+  });
 
   return getImportRun(run.id);
+}
+
+export async function cancelEmployeeImportRun(input: { actor: AuthUser; id: string; reason: string }) {
+  const current = await getImportRun(input.id);
+  const nextState = transitionBulkImportState(current.status, bulkImportActions.CANCEL);
+  await updateRun(input.id, nextState, {
+    completed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  await writeImportAudit(input.actor, input.id, current.status, nextState.status, nextState, {
+    totalRows: current.total_rows,
+    validRows: current.valid_rows,
+    invalidRows: current.invalid_rows,
+  }, "employee_import.cancelled", input.reason);
+  await notifyEmployeeImportCompleted({
+    importRunId: input.id,
+    status: nextState.status,
+    totalRows: current.total_rows,
+    createdCount: current.created_count,
+    errorCount: current.error_count,
+  });
+  return getImportRun(input.id);
 }
 
 async function validateRows(rows: Array<Record<string, unknown>>) {
@@ -158,6 +202,7 @@ async function validateRows(rows: Array<Record<string, unknown>>) {
       if (existingEmployeeIds.has(parsed.data.employeeId)) errors.push(`Employee ID already exists: ${parsed.data.employeeId}`);
       if (seenEmails.has(parsed.data.email)) errors.push(`Duplicate email in file: ${parsed.data.email}`);
       if (seenEmployeeIds.has(parsed.data.employeeId)) errors.push(`Duplicate employee ID in file: ${parsed.data.employeeId}`);
+      if (parsed.data.managerEmail?.toLowerCase() === parsed.data.email) errors.push("Manager email cannot be the same as employee email");
       seenEmails.add(parsed.data.email);
       seenEmployeeIds.add(parsed.data.employeeId);
 
@@ -169,6 +214,7 @@ async function validateRows(rows: Array<Record<string, unknown>>) {
         departmentId: department?.id,
         teamId: team?.id,
         managerId,
+        importAction: "create",
       };
     }
 
@@ -240,6 +286,10 @@ async function createImportedEmployee(input: { actor: AuthUser; row: Record<stri
       preferred_calendar: "jalali",
       preferred_locale: "fa-IR",
       date_display_timezone: "Asia/Tehran",
+      calendar_preference_status: "defaulted",
+      preferred_language: "fa",
+      text_direction: "rtl",
+      language_preference_status: "defaulted",
     })
     .select("id,manager_id,employee_id")
     .single();
@@ -302,18 +352,32 @@ async function writeImportAudit(
   toStatus: string,
   state: { owner: string; nextAction: string | null },
   metadata: Record<string, unknown>,
+  action = "employee_import.status_changed",
+  reason?: string,
 ) {
   await writeAuditEvent({
     actorUserId: actor.id,
-    action: "employee_import.status_changed",
+    action,
     entityType: "employee_import_run",
     entityId: runId,
     fromStatus,
     toStatus,
+    reason,
     metadata: {
       owner: state.owner,
       nextAction: state.nextAction,
       ...metadata,
     },
   });
+}
+
+function buildValidationSummary(rows: Awaited<ReturnType<typeof validateRows>>["rows"]) {
+  return {
+    errorsByRow: rows
+      .filter((row) => row.errors.length > 0)
+      .map((row) => ({
+        rowNumber: row.rowNumber,
+        errors: row.errors,
+      })),
+  };
 }

@@ -28,3 +28,7 @@ export const previewEmployeeImportSchema = z.object({
 export const processEmployeeImportSchema = previewEmployeeImportSchema.extend({
   dryRun: z.boolean().default(false),
 });
+
+export const cancelEmployeeImportSchema = z.object({
+  reason: z.string().min(8).max(500),
+});

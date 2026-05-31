@@ -184,8 +184,12 @@
         </div>
         <nav>
           <a href="/temp-login.html">Login page</a>
+          <a href="/temp-calendar.html" style="margin-left: 12px">Calendar</a>
+          <a href="/temp-rtl.html" style="margin-left: 12px">Language</a>
           <a href="/temp-form-builder.html" style="margin-left: 12px">Form builder</a>
+          <a href="/temp-rbac.html" style="margin-left: 12px">RBAC sync</a>
           <a href="/temp-bulk-import.html" style="margin-left: 12px">Bulk import</a>
+          <a href="/temp-employee-export.html" style="margin-left: 12px">Export</a>
         </nav>
       </header>
 
@@ -431,6 +435,10 @@
             preferred_calendar: "jalali",
             preferred_locale: "fa-IR",
             date_display_timezone: "Asia/Tehran",
+            calendar_preference_status: "defaulted",
+            preferred_language: "fa",
+            text_direction: "rtl",
+            language_preference_status: "defaulted",
           };
           const temporaryPassword = crypto.randomUUID();
           const signup = await fetch(`${supabaseUrl}/auth/v1/signup`, {
