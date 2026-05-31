@@ -30,6 +30,11 @@ URL: `https://omjblauittoyxknabrqg.supabase.co`
 `20260531155040_mpa_rich_text_editor`
 `20260531155709_downward_process_routing_chain`
 `20260531160203_mpa_auto_attach_to_evaluation`
+`20260531161048_end_cycle_evaluation_form`
+`20260531161423_evaluation_scoring_engine_weighted`
+`20260531162153_evaluation_workflow_chain`
+`20260531164035_pd_chat_logging`
+`20260531164905_mid_cycle_evaluation`
 
 This created:
 
@@ -54,6 +59,11 @@ This created:
 - `public.process_participants`
 - `public.process_self_assessments`
 - `public.process_downward_evaluations`
+- `public.end_cycle_evaluations`
+- `public.evaluation_score_snapshots`
+- `public.pd_chat_logs`
+- `public.mid_cycle_evaluations`
+- `public.mid_cycle_score_snapshots`
 - `app_private.current_user_role()`
 - `app_private.current_user_has_role(target_role text)`
 - `app_private.active_direct_report_count(manager_user_id uuid)`

@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/end-cycle-evaluation-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/endCycleEvaluationWorkflow.d.ts",
+      "default": "./src/endCycleEvaluationWorkflow.mjs"
+    }
+  }
+}

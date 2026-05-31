@@ -130,3 +130,43 @@ export async function notifyMpaAttachmentChanged(input: {
   // S5 notifications can replace this hook with in-app and email delivery.
   console.info("notification.mpa_attachment_changed", input);
 }
+
+export async function notifyEvaluationChanged(input: {
+  evaluationId: string;
+  processId?: string | null;
+  employeeId: string;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action: "created" | "updated" | "submitted" | "next_level_approved" | "head_approved" | "hrbp_approved" | "approved" | "returned" | "completed" | "visibility_changed";
+}) {
+  // S5 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.evaluation_changed", input);
+}
+
+export async function notifyMidCycleEvaluationChanged(input: {
+  evaluationId: string;
+  processId?: string | null;
+  employeeId: string;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action: "created" | "updated" | "submitted" | "manager_approved" | "hrbp_approved" | "returned" | "completed" | "visibility_changed";
+}) {
+  // S5 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.mid_cycle_evaluation_changed", input);
+}
+
+export async function notifyPdChatChanged(input: {
+  chatId: string;
+  processId?: string | null;
+  employeeId: string;
+  managerId?: string | null;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action: "created" | "updated" | "submitted" | "approved" | "returned" | "visibility_changed" | "archived";
+}) {
+  // S5 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.pd_chat_changed", input);
+}

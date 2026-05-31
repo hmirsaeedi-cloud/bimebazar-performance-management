@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/pd-chat-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/pdChatWorkflow.d.ts",
+      "default": "./src/pdChatWorkflow.mjs"
+    }
+  }
+}

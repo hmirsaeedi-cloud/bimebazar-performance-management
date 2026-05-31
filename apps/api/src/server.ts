@@ -5,9 +5,12 @@ import type { ErrorRequestHandler } from "express";
 import helmet from "helmet";
 import { authRouter } from "./auth/auth.routes.js";
 import { coreRouter } from "./core/calendar.routes.js";
+import { evaluationRouter } from "./evaluations/evaluation.routes.js";
+import { midCycleEvaluationRouter } from "./evaluations/midCycle.routes.js";
 import { formRouter } from "./forms/form.routes.js";
 import { attachSession } from "./middleware/session.js";
 import { mpaRouter } from "./mpa/mpa.routes.js";
+import { pdChatRouter } from "./pdChat/pdChat.routes.js";
 import { processRouter } from "./processes/process.routes.js";
 import { profileRouter } from "./profiles/profile.routes.js";
 import { rbacRouter } from "./rbac/rbac.routes.js";
@@ -28,8 +31,11 @@ app.get("/health", (_req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/core", coreRouter);
+app.use("/evaluations", evaluationRouter);
+app.use("/mid-cycle-evaluations", midCycleEvaluationRouter);
 app.use("/forms", formRouter);
 app.use("/mpas", mpaRouter);
+app.use("/pd-chats", pdChatRouter);
 app.use("/processes", processRouter);
 app.use("/profiles", profileRouter);
 app.use("/rbac", rbacRouter);

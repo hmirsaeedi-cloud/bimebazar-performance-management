@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Mid-cycle Evaluation</title>
+    <style>
+      :root { --bg:#f6f8f4; --panel:#fff; --ink:#172026; --muted:#5f6f76; --line:#d9e2df; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing: border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1180px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      .grid { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .score-panel { margin-top:12px; display:grid; gap:8px; min-width:210px; }
+      .score-line { display:flex; justify-content:space-between; gap:12px; border:1px solid var(--line); border-radius:8px; padding:10px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:860px) { header,.toolbar { align-items:stretch; flex-direction:column; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Mid-cycle Evaluation</h1>
+          <p>Checkpoint evaluation with weighted scoring hidden until manager submission.</p>
+          <p class="muted">Workflow: Manager draft -> submit -> manager approve -> HRBP approve -> visibility -> complete.</p>
+        </div>
+        <nav><a href="/temp-end-cycle-evaluation.html">End-cycle</a><a href="/all-pages.html" style="margin-left:12px">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Mid-cycle Evaluation</h2>
+        <form id="createForm" class="grid">
+          <label>Employee<select id="employeeId" required></select></label>
+          <label>Process<select id="processId"></select></label>
+          <label>Form Version<select id="formVersionId" required></select></label>
+          <button type="submit">Create draft</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Evaluations</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Employee</th><th>Status</th><th>Owner</th><th>Next Action</th><th>Score</th><th>Move</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null, profiles = [], processes = [], formVersions = [], evaluations = [];
+      const fallbackSchema = {
+        title: "Mid-cycle evaluation",
+        sections: [
+          { id: "progress", title: "Progress toward goals", questions: [{ id: "progress_rating", type: "scale", label: "Progress rating", min: 0, max: 5, weight: 70, required: true }] },
+          { id: "support", title: "Support and blockers", questions: [{ id: "support_rating", type: "scale", label: "Support needs rating", min: 0, max: 5, weight: 30, required: true }] },
+        ],
+      };
+      const message = document.querySelector("#message"), rows = document.querySelector("#rows"), countLabel = document.querySelector("#countLabel");
+
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers: { apikey: publishableKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      function fillSelect(select, options, label, render) { select.innerHTML = `<option value="">${label}</option>` + options.map((item) => `<option value="${item.id}">${render(item)}</option>`).join(""); }
+      function profileName(id) { const profile = profiles.find((item) => item.id === id); return profile?.display_name || profile?.email || id || "Unassigned"; }
+      function normalizeScaleAnswer(answer) {
+        if (typeof answer === "number") return { value: answer, selected: true };
+        if (answer && typeof answer === "object" && "value" in answer) return { value: Number(answer.value), selected: answer.selected === true };
+        return { value: null, selected: false };
+      }
+      function validateRequiredScaleAnswer(answer) { const n = normalizeScaleAnswer(answer); return n.value === 0 ? n.selected === true : n.value !== null && Number.isFinite(n.value); }
+      function calculateWeightedScore(schema, answers, reveal = false) {
+        let weightedTotal = 0, weightTotal = 0;
+        const sections = (schema.sections || []).map((section) => {
+          let sectionWeightedTotal = 0, sectionWeightTotal = 0; const questions = [];
+          for (const question of section.questions || []) {
+            if (question.type !== "scale") continue;
+            if (question.required && !validateRequiredScaleAnswer(answers[question.id])) throw new Error(`Required scale question is missing: ${question.label}`);
+            const n = normalizeScaleAnswer(answers[question.id]); if (!Number.isFinite(n.value)) continue;
+            const score = ((n.value - Number(question.min || 0)) / (Number(question.max || 5) - Number(question.min || 0))) * 100;
+            const weight = Number(question.weight || 0); sectionWeightedTotal += score * weight; sectionWeightTotal += weight;
+            questions.push({ questionId: question.id, value: n.value, selected: n.selected, weight, normalizedScore: reveal ? Number(score.toFixed(2)) : null });
+          }
+          weightedTotal += sectionWeightedTotal; weightTotal += sectionWeightTotal;
+          return { sectionId: section.id, sectionTitle: section.title, weight: sectionWeightTotal, contribution: reveal ? Number((sectionWeightedTotal / 100).toFixed(2)) : null, questions };
+        });
+        return { engineVersion: "weighted-v1", mode: reveal ? "submitted" : "hidden_preview", visible: reveal, totalScore: reveal && weightTotal > 0 ? Number((weightedTotal / weightTotal).toFixed(2)) : null, weightTotal, sections };
+      }
+      function sampleAnswers(schema) {
+        const answers = {}; let index = 0;
+        for (const section of schema.sections || []) for (const question of section.questions || []) {
+          if (question.type === "scale") { answers[question.id] = { value: index === 1 ? 0 : Number(question.max || 5), selected: true }; index += 1; }
+          else if (question.type !== "section_heading") answers[question.id] = "Mid-cycle checkpoint evidence.";
+        }
+        return answers;
+      }
+      function nextState(status, action) {
+        const table = {
+          draft:{ update:["in_progress","MANAGER","submit"], submit:["submitted","MANAGER","manager_approve"] },
+          in_progress:{ update:["in_progress","MANAGER","submit"], submit:["submitted","MANAGER","manager_approve"] },
+          submitted:{ manager_approve:["manager_approved","HRBP","hrbp_approve"], return:["returned","MANAGER","update_draft"] },
+          manager_approved:{ hrbp_approve:["hrbp_approved","HRBP","override_visibility"], return:["returned","MANAGER","update_draft"] },
+          hrbp_approved:{ visibility:["visibility_approved","HRBP","complete"], complete:["completed","SYSTEM",null], return:["returned","MANAGER","update_draft"] },
+          returned:{ update:["in_progress","MANAGER","submit"], submit:["submitted","MANAGER","manager_approve"] },
+          visibility_approved:{ complete:["completed","SYSTEM",null] },
+        };
+        return table[status]?.[action];
+      }
+      async function writeAudit(action, entityId, targetUserId, fromStatus, toStatus, metadata, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:targetUserId, action, entity_type:"mid_cycle_evaluation", entity_id:entityId, from_status:fromStatus, to_status:toStatus, reason, metadata }) });
+      }
+      async function loadData() {
+        [profiles, processes, formVersions] = await Promise.all([
+          supabaseFetch("/rest/v1/profiles?select=id,display_name,email,manager_id,hrbp_id&account_status=eq.active&order=display_name"),
+          supabaseFetch("/rest/v1/performance_processes?process_type=eq.mid_cycle&select=*&order=created_at.desc"),
+          supabaseFetch("/rest/v1/form_template_versions?select=id,template_id,version_number,status,schema&status=eq.published&order=created_at.desc"),
+        ]);
+        const midVersions = formVersions.filter((item) => item.schema?.title === "Mid-cycle evaluation");
+        fillSelect(document.querySelector("#employeeId"), profiles, "Select employee", (item) => item.display_name || item.email);
+        fillSelect(document.querySelector("#processId"), processes, "No process", (item) => item.name);
+        fillSelect(document.querySelector("#formVersionId"), midVersions.length ? midVersions : formVersions, "Select form version", (item) => `Version ${item.version_number} - ${item.schema?.title || "Evaluation form"}`);
+        await loadEvaluations();
+      }
+      async function loadEvaluations() {
+        evaluations = await supabaseFetch("/rest/v1/mid_cycle_evaluations?select=*&order=updated_at.desc");
+        countLabel.textContent = `${evaluations.length} mid-cycle evaluation${evaluations.length === 1 ? "" : "s"}`;
+        rows.innerHTML = evaluations.map((item) => `<tr><td>${profileName(item.employee_id)}</td><td><span class="pill">${item.status}</span>${item.last_return_reason ? `<div class="muted">Returned: ${item.last_return_reason}</div>` : ""}</td><td>${item.owner_role}</td><td>${item.next_action || ""}</td><td>${renderScore(item.score)}</td><td class="actions">${renderActions(item)}</td></tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => moveEvaluation(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      function renderScore(score) {
+        if (!score?.visible) return `<span class="muted">Hidden until submit</span>`;
+        return `<div class="score-panel"><strong>Total ${score.totalScore}</strong><span class="muted">${score.engineVersion || "weighted-v1"} / ${score.mode || "submitted"}</span>${(score.sections || []).map((section) => `<div class="score-line"><span>${section.sectionTitle}</span><span>${section.contribution}</span></div>`).join("")}</div>`;
+      }
+      function renderActions(item) {
+        const actions = { draft:[["update","Save draft"],["submit","Submit"]], in_progress:[["update","Save draft"],["submit","Submit"]], returned:[["update","Save draft"],["submit","Resubmit"]], submitted:[["manager_approve","Manager approve"],["return","Return"]], manager_approved:[["hrbp_approve","HRBP approve"],["return","Return"]], hrbp_approved:[["visibility","Reveal score"],["complete","Complete"],["return","Return"]], visibility_approved:[["complete","Complete"]] }[item.status] || [];
+        return actions.map(([action,label]) => `<button data-id="${item.id}" data-action="${action}" class="${action === "return" ? "warning" : ""}">${label}</button>`).join("");
+      }
+      async function moveEvaluation(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/mid_cycle_evaluations?id=eq.${id}&select=*`);
+        const next = nextState(current.status, action); if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
+        const now = new Date().toISOString(); const patch = { status:next[0], owner_role:next[1], next_action:next[2], updated_by:currentUser.id, updated_at:now };
+        const metadata = { owner:next[1], nextAction:next[2], processId:current.process_id }; let reason = null; let auditAction = `evaluation.mid_cycle_${action}`;
+        if (["update","submit"].includes(action)) {
+          const answers = sampleAnswers(current.locked_form_schema || fallbackSchema); const score = calculateWeightedScore(current.locked_form_schema || fallbackSchema, answers, action === "submit");
+          patch.answers = answers; patch.score = score; patch.score_engine_version = score.engineVersion; patch.score_calculated_at = now; if (action === "submit") patch.submitted_at = now;
+          metadata.answerKeys = Object.keys(answers); metadata.scoreVisible = score.visible; metadata.scoreEngineVersion = score.engineVersion; metadata.scoreMode = score.mode; auditAction = action === "submit" ? "evaluation.mid_cycle_submitted" : "evaluation.mid_cycle_updated";
+        }
+        if (action === "manager_approve") { patch.manager_approved_at = now; auditAction = "evaluation.mid_cycle_manager_approved"; }
+        if (action === "hrbp_approve") { patch.hrbp_approved_at = now; auditAction = "evaluation.mid_cycle_hrbp_approved"; }
+        if (action === "return") { reason = prompt("Why is this evaluation returned?", "Needs clearer mid-cycle evidence."); patch.returned_at = now; patch.last_return_reason = reason; auditAction = "evaluation.mid_cycle_returned"; }
+        if (action === "visibility") { patch.visibility = { employeeCanViewScore:true, employeeCanViewManagerNotes:true }; patch.visibility_changed_at = now; metadata.from = current.visibility; metadata.to = patch.visibility; auditAction = "evaluation.mid_cycle_visibility_changed"; }
+        if (action === "complete") { patch.completed_at = now; auditAction = "evaluation.mid_cycle_completed"; }
+        await supabaseFetch(`/rest/v1/mid_cycle_evaluations?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        if (patch.score) await supabaseFetch("/rest/v1/mid_cycle_score_snapshots", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ evaluation_id:id, engine_version:patch.score.engineVersion, mode:patch.score.mode, visible:patch.score.visible, total_score:patch.score.totalScore, weight_total:patch.score.weightTotal, sections:patch.score.sections, answers_hash:String(JSON.stringify(patch.answers).length), created_by:currentUser.id }) });
+        await writeAudit(auditAction, id, current.employee_id, current.status, next[0], metadata, reason);
+        showMessage(`Mid-cycle evaluation moved to ${next[0]}.`, "success"); await loadEvaluations();
+      }
+      document.querySelector("#createForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const employee = profiles.find((item) => item.id === document.querySelector("#employeeId").value);
+          const process = processes.find((item) => item.id === document.querySelector("#processId").value);
+          const formVersion = formVersions.find((item) => item.id === document.querySelector("#formVersionId").value);
+          if (!employee) throw new Error("Select an employee first."); if (!formVersion) throw new Error("Select a form version first.");
+          const id = crypto.randomUUID(); const state = { status:"draft", owner:"MANAGER", nextAction:"update_draft" };
+          await supabaseFetch("/rest/v1/mid_cycle_evaluations", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ id, process_id:process?.id || null, employee_id:employee.id, manager_id:employee.manager_id || currentUser.id, hrbp_id:employee.hrbp_id || null, form_template_version_id:formVersion.id, locked_form_schema:formVersion.schema || fallbackSchema, status:state.status, owner_role:state.owner, next_action:state.nextAction, answers:{}, score:calculateWeightedScore(formVersion.schema || fallbackSchema, {}, false), visibility:{ employeeCanViewScore:false, employeeCanViewManagerNotes:false }, created_by:currentUser.id, updated_by:currentUser.id }) });
+          await writeAudit("evaluation.mid_cycle_created", id, employee.id, null, state.status, { owner:state.owner, nextAction:state.nextAction, processId:process?.id || null, lockedFormTemplateVersionId:formVersion.id, lockedFormVersionNumber:formVersion.version_number });
+          showMessage("Draft mid-cycle evaluation created.", "success"); await loadEvaluations();
+        } catch (error) { showMessage(error.message, "error"); }
+      });
+      document.querySelector("#refreshButton").addEventListener("click", () => loadData().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadData(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load mid-cycle evaluations"; } })();
+    </script>
+  </body>
+</html>

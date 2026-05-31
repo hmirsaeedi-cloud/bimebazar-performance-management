@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/mid-cycle-evaluation-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/midCycleEvaluationWorkflow.d.ts",
+      "default": "./src/midCycleEvaluationWorkflow.mjs"
+    }
+  }
+}

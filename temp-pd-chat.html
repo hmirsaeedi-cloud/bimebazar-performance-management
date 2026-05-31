@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar PD Chat</title>
+    <style>
+      :root {
+        --bg: #f6f8f4;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #617079;
+        --line: #d9e2df;
+        --teal: #087c7c;
+        --green: #2f7d4f;
+        --gold: #bd7f18;
+        --danger: #b33b35;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { max-width: 1180px; margin: 0 auto; padding: 28px 18px 48px; }
+      header, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; }
+      p { margin: 0; color: var(--muted); }
+      section { margin-top: 18px; border: 1px solid var(--line); border-radius: 8px; padding: 18px; background: var(--panel); box-shadow: 0 12px 34px rgba(22, 40, 48, 0.08); }
+      .grid { display: grid; grid-template-columns: 1.1fr 1fr 1fr 1.4fr; gap: 12px; }
+      label { display: grid; gap: 6px; color: var(--muted); font-size: 0.82rem; font-weight: 750; }
+      input, select, textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px; color: var(--ink); font: inherit; }
+      textarea { min-height: 82px; resize: vertical; }
+      button { min-height: 40px; border: 0; border-radius: 8px; background: var(--teal); color: #fff; cursor: pointer; font: inherit; font-weight: 800; }
+      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+      button.warning { background: var(--gold); }
+      button.danger { background: var(--danger); }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 0.78rem; }
+      .pill { display: inline-flex; border-radius: 999px; padding: 4px 8px; background: #e8f4f2; color: #075b5b; font-size: 0.76rem; font-weight: 800; }
+      .muted { margin-top: 4px; color: var(--muted); font-size: 0.76rem; }
+      .messages { display: grid; gap: 8px; min-width: 260px; }
+      .bubble { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: #fbfcfb; }
+      .bubble strong { color: var(--green); font-size: 0.78rem; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      @media (max-width: 880px) {
+        header, .toolbar { align-items: stretch; flex-direction: column; }
+        .grid { grid-template-columns: 1fr; }
+        table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>PD Chat Logging</h1>
+          <p>Employee and manager development conversations with explicit workflow status, owner, and next action.</p>
+        </div>
+        <nav>
+          <a href="/temp-end-cycle-evaluation.html">Evaluation</a>
+          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Create Chat Log</h2>
+        <form id="createForm" class="grid">
+          <label>Employee<select id="employeeId" required></select></label>
+          <label>Manager<select id="managerId"></select></label>
+          <label>Process<select id="processId"></select></label>
+          <label>Topic<input id="topic" value="Quarterly development check-in" required /></label>
+          <label style="grid-column: 1 / -1">First message<textarea id="messageText" required>I want to discuss growth goals and support needed for the next cycle.</textarea></label>
+          <button type="submit">Create chat</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Chat Logs</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Topic</th>
+              <th>People</th>
+              <th>Status</th>
+              <th>Owner / Next</th>
+              <th>Messages</th>
+              <th>Move</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let profiles = [];
+      let processes = [];
+      let chats = [];
+
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function fillSelect(select, options, label, render) {
+        select.innerHTML = `<option value="">${label}</option>` + options.map((item) => `<option value="${item.id}">${render(item)}</option>`).join("");
+      }
+
+      function profileName(id) {
+        const profile = profiles.find((item) => item.id === id);
+        return profile?.display_name || profile?.email || id || "Unassigned";
+      }
+
+      function stateFor(status, action) {
+        const table = {
+          draft: { update: ["active", "EMPLOYEE_MANAGER", "submit"], submit: ["submitted", "MANAGER", "approve"] },
+          active: { update: ["active", "EMPLOYEE_MANAGER", "submit"], submit: ["submitted", "MANAGER", "approve"] },
+          submitted: { approve: ["manager_reviewed", "MANAGER", "override_visibility"], return: ["returned", "EMPLOYEE", "update"] },
+          manager_reviewed: { visibility: ["visibility_approved", "EMPLOYEE_MANAGER", "archive"], return: ["returned", "EMPLOYEE", "update"], archive: ["archived", "SYSTEM", null] },
+          returned: { update: ["active", "EMPLOYEE_MANAGER", "submit"], submit: ["submitted", "MANAGER", "approve"] },
+          visibility_approved: { archive: ["archived", "SYSTEM", null] },
+        };
+        return table[status]?.[action];
+      }
+
+      async function writeAudit(action, entityId, targetUserId, fromStatus, toStatus, metadata, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: targetUserId,
+            action,
+            entity_type: "pd_chat_log",
+            entity_id: entityId,
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata,
+          }),
+        });
+      }
+
+      function newMessage(body) {
+        return {
+          id: crypto.randomUUID(),
+          authorId: currentUser.id,
+          authorRole: "HR_ADMIN",
+          body: body.trim(),
+          createdAt: new Date().toISOString(),
+          editedAt: null,
+          visibility: "employee_manager",
+        };
+      }
+
+      async function loadData() {
+        [profiles, processes] = await Promise.all([
+          supabaseFetch("/rest/v1/profiles?select=id,display_name,email,manager_id,account_status&account_status=eq.active&order=display_name"),
+          supabaseFetch("/rest/v1/performance_processes?select=id,name,status,process_type&order=created_at.desc"),
+        ]);
+        fillSelect(document.querySelector("#employeeId"), profiles, "Select employee", (item) => item.display_name || item.email);
+        fillSelect(document.querySelector("#managerId"), profiles, "Auto manager", (item) => item.display_name || item.email);
+        fillSelect(document.querySelector("#processId"), processes, "No process", (item) => item.name);
+        await loadChats();
+      }
+
+      async function loadChats() {
+        chats = await supabaseFetch("/rest/v1/pd_chat_logs?select=*&order=updated_at.desc");
+        countLabel.textContent = `${chats.length} chat log${chats.length === 1 ? "" : "s"}`;
+        rows.innerHTML = chats.map((chat) => `
+          <tr>
+            <td>
+              <strong>${chat.topic}</strong>
+              ${chat.last_return_reason ? `<div class="muted">Returned: ${chat.last_return_reason}</div>` : ""}
+            </td>
+            <td>
+              <div>Employee: ${profileName(chat.employee_id)}</div>
+              <div class="muted">Manager: ${profileName(chat.manager_id)}</div>
+            </td>
+            <td><span class="pill">${chat.status}</span></td>
+            <td>
+              <div>${chat.owner_role}</div>
+              <div class="muted">${chat.next_action || "No next action"}</div>
+            </td>
+            <td class="messages">${renderMessages(chat.messages)}</td>
+            <td class="actions">${renderActions(chat)}</td>
+          </tr>
+        `).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => {
+          button.addEventListener("click", () => moveChat(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error")));
+        });
+      }
+
+      function renderMessages(messages) {
+        return (messages || []).slice(-3).map((item) => `
+          <div class="bubble">
+            <strong>${item.authorRole}</strong>
+            <div>${item.body}</div>
+            <div class="muted">${new Date(item.createdAt).toLocaleString("fa-IR")}</div>
+          </div>
+        `).join("");
+      }
+
+      function renderActions(chat) {
+        const actions = {
+          draft: [["update", "Add message"], ["submit", "Submit"]],
+          active: [["update", "Add message"], ["submit", "Submit"]],
+          returned: [["update", "Add message"], ["submit", "Resubmit"]],
+          submitted: [["approve", "Manager review"], ["return", "Return"]],
+          manager_reviewed: [["visibility", "Share visibility"], ["archive", "Archive"], ["return", "Return"]],
+          visibility_approved: [["archive", "Archive"]],
+        }[chat.status] || [];
+        return actions.map(([action, label]) => `<button data-id="${chat.id}" data-action="${action}" class="${action === "return" ? "warning" : action === "archive" ? "danger" : ""}">${label}</button>`).join("");
+      }
+
+      async function moveChat(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/pd_chat_logs?id=eq.${id}&select=*`);
+        const next = stateFor(current.status, action);
+        if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
+        const now = new Date().toISOString();
+        const patch = { status: next[0], owner_role: next[1], next_action: next[2], updated_by: currentUser.id, updated_at: now };
+        const metadata = { owner: next[1], nextAction: next[2], processId: current.process_id, messageCount: (current.messages || []).length };
+        let reason = null;
+        let auditAction = `pd_chat.${action}`;
+        if (action === "update") {
+          const body = prompt("Add a PD Chat message", "Follow-up note from the development conversation.");
+          if (!body) return;
+          patch.messages = [...(current.messages || []), newMessage(body)];
+          metadata.messageCount = patch.messages.length;
+          auditAction = "pd_chat.updated";
+        }
+        if (action === "submit") {
+          patch.submitted_at = now;
+          auditAction = "pd_chat.submitted";
+        }
+        if (action === "approve") {
+          patch.approved_at = now;
+          auditAction = "pd_chat.approved";
+        }
+        if (action === "return") {
+          reason = prompt("Why is this chat returned?", "Needs one more clarification before review.");
+          patch.returned_at = now;
+          patch.last_return_reason = reason;
+          auditAction = "pd_chat.returned";
+        }
+        if (action === "visibility") {
+          patch.visibility = { employeeCanView: true, managerCanView: true, hrbpCanView: true };
+          patch.visibility_changed_at = now;
+          metadata.from = current.visibility;
+          metadata.to = patch.visibility;
+          auditAction = "pd_chat.visibility_changed";
+        }
+        if (action === "archive") {
+          patch.archived_at = now;
+          auditAction = "pd_chat.archived";
+        }
+        await supabaseFetch(`/rest/v1/pd_chat_logs?id=eq.${id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(patch),
+        });
+        await writeAudit(auditAction, id, current.employee_id, current.status, next[0], metadata, reason);
+        showMessage(`PD Chat moved to ${next[0]}.`, "success");
+        await loadChats();
+      }
+
+      document.querySelector("#createForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const employee = profiles.find((item) => item.id === document.querySelector("#employeeId").value);
+          const managerId = document.querySelector("#managerId").value || employee?.manager_id || null;
+          const processId = document.querySelector("#processId").value || null;
+          const topic = document.querySelector("#topic").value.trim();
+          const body = document.querySelector("#messageText").value.trim();
+          if (!employee) throw new Error("Select an employee first.");
+          if (!body) throw new Error("Write the first message first.");
+          const id = crypto.randomUUID();
+          const state = { status: "draft", owner: "EMPLOYEE", nextAction: "update" };
+          const messages = [newMessage(body)];
+          await supabaseFetch("/rest/v1/pd_chat_logs", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              id,
+              process_id: processId,
+              employee_id: employee.id,
+              manager_id: managerId,
+              status: state.status,
+              owner_role: state.owner,
+              next_action: state.nextAction,
+              topic,
+              messages,
+              visibility: { employeeCanView: true, managerCanView: true, hrbpCanView: false },
+              created_by: currentUser.id,
+              updated_by: currentUser.id,
+            }),
+          });
+          await writeAudit("pd_chat.created", id, employee.id, null, state.status, {
+            owner: state.owner,
+            nextAction: state.nextAction,
+            processId,
+            messageCount: messages.length,
+          });
+          showMessage("PD Chat log created.", "success");
+          await loadChats();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      document.querySelector("#refreshButton").addEventListener("click", () => loadData().catch((error) => showMessage(error.message, "error")));
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadData();
+        } catch (error) {
+          showMessage(error.message, "error");
+          countLabel.textContent = "Could not load PD Chat logs";
+        }
+      })();
+    </script>
+  </body>
+</html>
