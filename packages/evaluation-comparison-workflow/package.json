@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/evaluation-comparison-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/evaluationComparisonWorkflow.d.ts",
+      "default": "./src/evaluationComparisonWorkflow.mjs"
+    }
+  }
+}

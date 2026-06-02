@@ -1,0 +1,10 @@
+{
+  "name": "@bimebazar/individual-survey-process-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/individualSurveyProcessWorkflow.mjs",
+  "types": "src/individualSurveyProcessWorkflow.d.ts",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

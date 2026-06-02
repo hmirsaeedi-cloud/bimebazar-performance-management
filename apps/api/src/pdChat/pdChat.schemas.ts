@@ -9,6 +9,14 @@ export const createPdChatSchema = z.object({
   message: z.string().min(1).max(4000),
 });
 
+export const pdChatAttachmentSchema = z.object({
+  processId: z.string().uuid().optional().nullable(),
+  employeeId: z.string().uuid(),
+  managerId: z.string().uuid().optional().nullable(),
+  evaluationType: z.enum(["end_cycle_evaluation", "mid_cycle_evaluation", "downward_evaluation"]),
+  evaluationId: z.string().uuid(),
+});
+
 export const pdChatMessageSchema = z.object({
   message: z.string().min(1).max(4000),
 });
@@ -29,5 +37,6 @@ export const listPdChatsQuerySchema = z.object({
   processId: z.string().uuid().optional(),
   employeeId: z.string().uuid().optional(),
   managerId: z.string().uuid().optional(),
+  evaluationId: z.string().uuid().optional(),
   status: z.enum(["draft", "active", "submitted", "manager_reviewed", "returned", "visibility_approved", "archived"]).optional(),
 });

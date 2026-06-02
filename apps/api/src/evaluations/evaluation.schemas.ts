@@ -40,3 +40,77 @@ export const listEvaluationsQuerySchema = z.object({
   employeeId: z.string().uuid().optional(),
   status: z.enum(["draft", "in_progress", "submitted", "nl_approved", "head_approved", "hrbp_approved", "returned", "approved", "visibility_approved", "completed"]).optional(),
 });
+
+export const listPerformanceBandFlagsQuerySchema = z.object({
+  evaluationId: z.string().uuid().optional(),
+  employeeId: z.string().uuid().optional(),
+  flagType: z.enum(["pip", "promotion", "none"]).optional(),
+  status: z.enum(["detected", "under_review", "approved", "returned", "converted", "dismissed"]).optional(),
+});
+
+export const generatePerformanceBandFlagSchema = z.object({
+  evaluationId: z.string().uuid(),
+  thresholds: z.object({
+    pipMax: z.number().min(0).max(100).default(59.99),
+    promotionMin: z.number().min(0).max(100).default(90),
+  }).default({}),
+});
+
+export const updatePerformanceBandFlagSchema = z.object({
+  rationale: z.string().min(8).max(1000).optional(),
+  thresholds: z.object({
+    pipMax: z.number().min(0).max(100).optional(),
+    promotionMin: z.number().min(0).max(100).optional(),
+  }).optional(),
+});
+
+export const performanceBandFlagReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const performanceBandFlagDismissSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const performanceBandFlagConvertSchema = z.object({
+  targetType: z.enum(["pip", "promotion"]),
+  targetId: z.string().uuid().optional().nullable(),
+});
+
+export const performanceBandFlagVisibilitySchema = z.object({
+  visibility: z.object({
+    employeeCanView: z.boolean().default(false),
+    managerCanView: z.boolean().default(true),
+    hrbpCanView: z.boolean().default(true),
+    hrAdminCanView: z.boolean().default(true),
+  }),
+});
+
+export const listEvaluationComparisonsQuerySchema = z.object({
+  processId: z.string().uuid().optional(),
+  employeeId: z.string().uuid().optional(),
+  status: z.enum(["draft", "in_review", "submitted", "approved", "returned", "visibility_approved", "completed"]).optional(),
+});
+
+export const createEvaluationComparisonSchema = z.object({
+  selfAssessmentId: z.string().uuid(),
+  managerEvaluationId: z.string().uuid(),
+  revealScores: z.boolean().default(false),
+});
+
+export const updateEvaluationComparisonSchema = z.object({
+  notes: z.string().max(1200).optional(),
+  revealScores: z.boolean().default(false),
+});
+
+export const evaluationComparisonReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const evaluationComparisonVisibilitySchema = z.object({
+  visibility: z.object({
+    employeeCanView: z.boolean().default(false),
+    managerCanView: z.boolean().default(true),
+    hrbpCanView: z.boolean().default(true),
+  }),
+});

@@ -35,6 +35,20 @@ URL: `https://omjblauittoyxknabrqg.supabase.co`
 `20260531162153_evaluation_workflow_chain`
 `20260531164035_pd_chat_logging`
 `20260531164905_mid_cycle_evaluation`
+`20260601113437_immutable_audit_log`
+`20260601120211_in_app_notifications`
+`20260601121234_dashboard_all_role_views`
+`20260601154341_feedback_request_basic`
+`20260601155022_process_form_instance_table`
+`20260601155819_promotion_trigger_workflow`
+`20260601160914_pip_trigger_workflow`
+`20260601161735_email_notifications`
+`20260601162609_mpa_history_versioning`
+`20260601162720_mpa_history_seed_data`
+`20260601163342_form_versioning_on_edit`
+`20260602121415_admin_form_movement_audit_reason`
+`20260602122152_notification_preference_settings`
+`20260602122940_self_assessment_manager_side_by_side`
 
 This created:
 
@@ -47,11 +61,13 @@ This created:
 - `public.departments`
 - `public.teams`
 - `public.audit_events`
+- `public.audit_export_requests`
 - `public.form_templates`
 - `public.form_template_versions`
 - `public.mpa_cycles`
 - `public.mpas`
 - `public.mpa_content_revisions`
+- `public.mpa_history_versions`
 - `public.mpa_evaluation_attachments`
 - `public.employee_import_runs`
 - `public.employee_import_rows`
@@ -64,8 +80,19 @@ This created:
 - `public.pd_chat_logs`
 - `public.mid_cycle_evaluations`
 - `public.mid_cycle_score_snapshots`
+- `public.notifications`
+- `public.dashboard_preferences`
+- `public.feedback_requests`
+- `public.feedback_request_recipients`
+- `public.feedback_responses`
+- `public.process_form_instances`
+- `public.promotion_cases`
+- `public.pip_cases`
+- `public.email_notifications`
 - `app_private.current_user_role()`
 - `app_private.current_user_has_role(target_role text)`
+- `app_private.set_audit_event_hash()`
+- `app_private.prevent_audit_event_mutation()`
 - `app_private.active_direct_report_count(manager_user_id uuid)`
 - `app_private.sync_computed_manager_role(manager_user_id uuid)`
 - private Storage bucket `profile-documents`
@@ -94,6 +121,124 @@ Core language preferences are guarded by:
 - `core.language.read`
 - `core.language.update`
 - `core.language.override`
+
+Individual survey processes are guarded by:
+
+- `process.survey.read`
+- `process.survey.create`
+- `process.survey.update`
+- `process.survey.start`
+- `process.survey.submit`
+- `process.survey.approve`
+- `process.survey.return`
+- `process.survey.override`
+- `process.survey.complete`
+- `process.survey.cancel`
+
+Tables:
+
+- `individual_survey_processes`
+- `individual_survey_responses`
+
+Performance band auto-flags are guarded by:
+
+- `evaluation.band_flags.read`
+- `evaluation.band_flags.create`
+- `evaluation.band_flags.update`
+- `evaluation.band_flags.submit`
+- `evaluation.band_flags.approve`
+- `evaluation.band_flags.return`
+- `evaluation.band_flags.override`
+- `evaluation.band_flags.convert`
+- `evaluation.band_flags.dismiss`
+
+Table:
+
+- `performance_band_flags`
+
+Feedback anonymity guards are protected by:
+
+- `feedback.anonymity_review`
+- `feedback.anonymity_release`
+
+Columns added to `feedback_requests`:
+
+- `min_response_count`
+- `anonymity_status`
+- `responses_released_at`
+
+PD Chat evaluation attachments are guarded by:
+
+- `pd_chat.attach`
+
+Table:
+
+- `pd_chat_evaluation_attachments`
+
+Columns added for attachment visibility:
+
+- `pd_chat_logs.attached_evaluation_type`
+- `pd_chat_logs.attached_evaluation_id`
+- `pd_chat_logs.attached_at`
+- `end_cycle_evaluations.attached_pd_chat_id`
+- `mid_cycle_evaluations.attached_pd_chat_id`
+- `process_downward_evaluations.attached_pd_chat_id`
+
+HRBP aggregated reports are guarded by:
+
+- `reports.read`
+- `reports.create`
+- `reports.generate`
+- `reports.submit`
+- `reports.approve`
+- `reports.return`
+- `reports.override`
+- `reports.export`
+- `reports.archive`
+
+Table:
+
+- `hrbp_report_snapshots`
+
+Admin form movement is guarded by:
+
+- `process.admin_move`
+
+Columns added to `process_form_instances`:
+
+- `admin_moved_at`
+- `admin_moved_by`
+- `admin_move_reason`
+- `admin_move_from_status`
+- `admin_move_to_status`
+
+Notification preference settings are guarded by:
+
+- `notifications.preferences.read`
+- `notifications.preferences.update`
+- `notifications.preferences.submit`
+- `notifications.preferences.approve`
+- `notifications.preferences.return`
+- `notifications.preferences.override`
+
+Table:
+
+- `notification_preferences`
+
+Self-assessment vs. manager side-by-side comparisons are guarded by:
+
+- `evaluation.comparison.read`
+- `evaluation.comparison.create`
+- `evaluation.comparison.update`
+- `evaluation.comparison.submit`
+- `evaluation.comparison.approve`
+- `evaluation.comparison.return`
+- `evaluation.comparison.override`
+- `evaluation.comparison.complete`
+
+Table:
+
+- `evaluation_comparisons`
 
 ## Environment
 

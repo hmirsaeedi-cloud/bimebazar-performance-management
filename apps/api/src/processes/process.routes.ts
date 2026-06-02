@@ -5,34 +5,63 @@ import {
   downwardEvaluationResponseSchema,
   downwardEvaluationReturnSchema,
   downwardEvaluationVisibilitySchema,
+  formInstanceAdminMoveSchema,
+  formInstancePayloadSchema,
+  formInstanceReturnSchema,
+  formInstanceVisibilitySchema,
+  createIndividualSurveySchema,
+  individualSurveyResponseSchema,
+  individualSurveyReturnSchema,
+  individualSurveyVisibilitySchema,
+  listIndividualSurveysQuerySchema,
   listProcessesQuerySchema,
   processDecisionSchema,
   selfAssessmentResponseSchema,
   selfAssessmentReturnSchema,
   selfAssessmentVisibilitySchema,
   updateProcessSchema,
+  updateIndividualSurveySchema,
 } from "./process.schemas.js";
 import {
   approveDownwardHrbp,
   approveDownwardNextLevel,
+  approveIndividualSurveyResponse,
+  adminMoveProcessFormInstance,
+  approveProcessFormInstance,
+  closeProcessFormInstance,
   approveSelfAssessment,
+  cancelIndividualSurvey,
   completeSelfAssessment,
   completeDownwardEvaluation,
+  completeIndividualSurvey,
   configureProcess,
+  createIndividualSurvey,
   createProcess,
   getProcess,
   listDownwardEvaluations,
+  listIndividualSurveys,
+  listProcessFormInstances,
   listProcesses,
   listSelfAssessments,
   moveProcess,
   returnDownwardEvaluation,
+  returnIndividualSurveyResponse,
+  returnProcessFormInstance,
   returnSelfAssessment,
   startDownwardEvaluation,
+  startIndividualSurvey,
   startSelfAssessment,
   submitDownwardEvaluation,
+  submitIndividualSurveyResponse,
+  submitProcessFormInstance,
   submitSelfAssessment,
+  syncProcessFormInstances,
   updateProcess,
   updateDownwardEvaluationVisibility,
+  updateIndividualSurvey,
+  updateIndividualSurveyVisibility,
+  updateProcessFormInstance,
+  updateProcessFormInstanceVisibility,
   updateSelfAssessmentVisibility,
 } from "./process.service.js";
 
@@ -58,6 +87,83 @@ processRouter.get("/:id/self-assessments", requirePermission("process.read"), as
 processRouter.get("/:id/downward-evaluations", requirePermission("process.read"), async (req, res, next) => {
   try {
     res.json({ downwardEvaluations: await listDownwardEvaluations({ processId: req.params.id }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.get("/:id/form-instances", requirePermission("process.read"), async (req, res, next) => {
+  try {
+    res.json({ formInstances: await listProcessFormInstances({ processId: req.params.id }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/:id/form-instances/sync", requirePermission("process.configure"), async (req, res, next) => {
+  try {
+    res.status(201).json({ formInstances: await syncProcessFormInstances({ actor: req.user!, processId: req.params.id }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.patch("/form-instances/:formInstanceId", requirePermission("process.submit"), async (req, res, next) => {
+  try {
+    const input = formInstancePayloadSchema.parse(req.body);
+    res.json({ formInstance: await updateProcessFormInstance({ actor: req.user!, id: req.params.formInstanceId, responsePayload: input.responsePayload }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/form-instances/:formInstanceId/submit", requirePermission("process.submit"), async (req, res, next) => {
+  try {
+    const input = formInstancePayloadSchema.parse(req.body);
+    res.json({ formInstance: await submitProcessFormInstance({ actor: req.user!, id: req.params.formInstanceId, responsePayload: input.responsePayload }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/form-instances/:formInstanceId/approve", requirePermission("process.approve"), async (req, res, next) => {
+  try {
+    res.json({ formInstance: await approveProcessFormInstance({ actor: req.user!, id: req.params.formInstanceId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/form-instances/:formInstanceId/return", requirePermission("process.return"), async (req, res, next) => {
+  try {
+    const input = formInstanceReturnSchema.parse(req.body);
+    res.json({ formInstance: await returnProcessFormInstance({ actor: req.user!, id: req.params.formInstanceId, reason: input.reason }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/form-instances/:formInstanceId/close", requirePermission("process.complete"), async (req, res, next) => {
+  try {
+    res.json({ formInstance: await closeProcessFormInstance({ actor: req.user!, id: req.params.formInstanceId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.patch("/form-instances/:formInstanceId/visibility", requirePermission("process.override"), async (req, res, next) => {
+  try {
+    const input = formInstanceVisibilitySchema.parse(req.body);
+    res.json({ formInstance: await updateProcessFormInstanceVisibility({ actor: req.user!, id: req.params.formInstanceId, visibility: input.visibility }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/form-instances/:formInstanceId/admin-move", requirePermission("process.admin_move"), async (req, res, next) => {
+  try {
+    const input = formInstanceAdminMoveSchema.parse(req.body);
+    res.json({ formInstance: await adminMoveProcessFormInstance({ actor: req.user!, id: req.params.formInstanceId, targetStatus: input.targetStatus, reason: input.reason }) });
   } catch (error) {
     next(error);
   }
@@ -190,6 +296,102 @@ processRouter.post("/self-assessments/:selfAssessmentId/return", requirePermissi
   try {
     const input = selfAssessmentReturnSchema.parse(req.body);
     res.json({ selfAssessment: await returnSelfAssessment({ actor: req.user!, id: req.params.selfAssessmentId, reason: input.reason }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.get("/surveys/individual", requirePermission("process.survey.read"), async (req, res, next) => {
+  try {
+    const query = listIndividualSurveysQuerySchema.parse(req.query);
+    res.json({ surveys: await listIndividualSurveys(query) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/individual", requirePermission("process.survey.create"), async (req, res, next) => {
+  try {
+    const input = createIndividualSurveySchema.parse(req.body);
+    res.status(201).json({ survey: await createIndividualSurvey({ actor: req.user!, ...input }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.patch("/surveys/individual/:surveyId", requirePermission("process.survey.update"), async (req, res, next) => {
+  try {
+    const patch = updateIndividualSurveySchema.parse(req.body);
+    res.json({ survey: await updateIndividualSurvey({ actor: req.user!, id: req.params.surveyId, patch }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/individual/:surveyId/start", requirePermission("process.survey.start"), async (req, res, next) => {
+  try {
+    res.json({ survey: await startIndividualSurvey({ actor: req.user!, id: req.params.surveyId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.patch("/surveys/individual/:surveyId/visibility", requirePermission("process.survey.override"), async (req, res, next) => {
+  try {
+    const input = individualSurveyVisibilitySchema.parse(req.body);
+    res.json({ survey: await updateIndividualSurveyVisibility({ actor: req.user!, id: req.params.surveyId, visibility: input.visibility }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/individual/:surveyId/complete", requirePermission("process.survey.complete"), async (req, res, next) => {
+  try {
+    res.json({ survey: await completeIndividualSurvey({ actor: req.user!, id: req.params.surveyId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/individual/:surveyId/cancel", requirePermission("process.survey.cancel"), async (req, res, next) => {
+  try {
+    const input = processDecisionSchema.parse(req.body);
+    res.json({ survey: await cancelIndividualSurvey({ actor: req.user!, id: req.params.surveyId, reason: input.reason }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.patch("/surveys/individual/responses/:responseId", requirePermission("process.survey.submit"), async (req, res, next) => {
+  try {
+    const input = individualSurveyResponseSchema.parse(req.body);
+    res.json({ response: await submitIndividualSurveyResponse({ actor: req.user!, id: req.params.responseId, answers: input.answers, saveOnly: true }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/individual/responses/:responseId/submit", requirePermission("process.survey.submit"), async (req, res, next) => {
+  try {
+    const input = individualSurveyResponseSchema.parse(req.body);
+    res.json({ response: await submitIndividualSurveyResponse({ actor: req.user!, id: req.params.responseId, answers: input.answers }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/individual/responses/:responseId/approve", requirePermission("process.survey.approve"), async (req, res, next) => {
+  try {
+    res.json({ response: await approveIndividualSurveyResponse({ actor: req.user!, id: req.params.responseId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/individual/responses/:responseId/return", requirePermission("process.survey.return"), async (req, res, next) => {
+  try {
+    const input = individualSurveyReturnSchema.parse(req.body);
+    res.json({ response: await returnIndividualSurveyResponse({ actor: req.user!, id: req.params.responseId, reason: input.reason }) });
   } catch (error) {
     next(error);
   }

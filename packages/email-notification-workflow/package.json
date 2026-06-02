@@ -1,0 +1,13 @@
+{
+  "name": "@bimebazar/email-notification-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/emailNotificationWorkflow.mjs",
+  "types": "src/emailNotificationWorkflow.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/emailNotificationWorkflow.mjs",
+      "types": "./src/emailNotificationWorkflow.d.ts"
+    }
+  }
+}

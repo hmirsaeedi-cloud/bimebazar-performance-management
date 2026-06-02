@@ -203,3 +203,26 @@ export const clonePresetSchema = z.object({
   name: z.string().min(2).max(180).optional(),
   description: z.string().max(800).optional(),
 });
+
+export const createFormVersionEditSchema = z.object({
+  schema: formSchemaDefinition.optional(),
+  changeSummary: z.record(z.unknown()).default({}),
+});
+
+export const updateFormVersionEditSchema = z.object({
+  schema: formSchemaDefinition.optional(),
+  changeSummary: z.record(z.unknown()).optional(),
+});
+
+export const formVersionDecisionSchema = z.object({
+  reason: z.string().min(8).max(500).optional(),
+});
+
+export const formVersionVisibilitySchema = z.object({
+  visibilityPolicy: z.object({
+    visibleToEmployees: z.boolean().default(false),
+    visibleToManagers: z.boolean().default(false),
+    visibleToHrbp: z.boolean().default(true),
+    visibleToHrAdmin: z.boolean().default(true),
+  }),
+});

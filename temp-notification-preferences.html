@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Notification Preferences</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1180px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      .grid { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; align-items:end; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      input[type="checkbox"] { width:18px; height:18px; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.submitted,.pill.returned { background:#fff1d6; color:#7a4f00; }
+      .pill.overridden { background:#f1eafb; color:#4a2a77; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .checks { display:flex; flex-wrap:wrap; gap:10px; }
+      .checks span { display:inline-flex; gap:6px; align-items:center; color:var(--ink); }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Notification Preference Settings</h1>
+          <p>Manage channel toggles, digest frequency, quiet hours, review workflow, and audit-backed overrides.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Preference Controls</h2>
+        <div class="grid">
+          <label>User<select id="userSelect"></select></label>
+          <label>Digest<select id="digestSelect"><option>immediate</option><option>daily</option><option>weekly</option><option>off</option></select></label>
+          <label>Quiet start<input id="quietStart" value="18:00" /></label>
+          <label>Quiet end<input id="quietEnd" value="09:00" /></label>
+        </div>
+        <div class="checks" style="margin-top:12px">
+          <span><input id="inAppEnabled" type="checkbox" checked /> In-app</span>
+          <span><input id="emailEnabled" type="checkbox" checked /> Email</span>
+          <span><input id="pushEnabled" type="checkbox" /> Push</span>
+          <span><input id="smsEnabled" type="checkbox" /> SMS</span>
+          <span><input id="managerCanView" type="checkbox" /> Manager can view</span>
+          <span><input id="hrbpCanView" type="checkbox" checked /> HRBP can view</span>
+        </div>
+        <div class="actions" style="margin-top:12px">
+          <button id="createButton" type="button">Create defaults</button>
+          <button id="saveButton" type="button">Save update</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Preferences Table</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>User</th><th>State</th><th>Channels</th><th>Quiet hours</th><th>Visibility</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let users = [];
+      let preferences = [];
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        defaulted:{ status:"defaulted", owner:"USER", nextAction:"update" },
+        customized:{ status:"customized", owner:"USER", nextAction:"submit" },
+        submitted:{ status:"submitted", owner:"HRBP", nextAction:"approve" },
+        approved:{ status:"approved", owner:"USER", nextAction:"update" },
+        returned:{ status:"returned", owner:"USER", nextAction:"update" },
+        overridden:{ status:"overridden", owner:"USER", nextAction:"update" },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      function selectedUserId() { return document.querySelector("#userSelect").value || currentUser.id; }
+      function preferenceForSelectedUser() { return preferences.find((item) => item.user_id === selectedUserId()); }
+      function preferencePatch() {
+        return {
+          in_app_enabled: document.querySelector("#inAppEnabled").checked,
+          email_enabled: document.querySelector("#emailEnabled").checked,
+          push_enabled: document.querySelector("#pushEnabled").checked,
+          sms_enabled: document.querySelector("#smsEnabled").checked,
+          digest_frequency: document.querySelector("#digestSelect").value,
+          quiet_hours: { enabled:true, start:document.querySelector("#quietStart").value, end:document.querySelector("#quietEnd").value, timezone:"Asia/Tehran" },
+          visibility: { managerCanView:document.querySelector("#managerCanView").checked, hrbpCanView:document.querySelector("#hrbpCanView").checked, hrAdminCanView:true },
+        };
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.user_id, action, entity_type:"notification_preference", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason, metadata:{ owner:stateByStatus[toStatus]?.owner, nextAction:stateByStatus[toStatus]?.nextAction || null, ...metadata } }) });
+      }
+      async function loadUsers() {
+        users = await supabaseFetch("/rest/v1/profiles?select=id,email,display_name,role_code,account_status&account_status=eq.active&order=display_name.asc");
+        document.querySelector("#userSelect").innerHTML = users.map((user) => `<option value="${user.id}">${user.display_name || user.email} - ${user.role_code}</option>`).join("");
+        if (users.some((user) => user.id === currentUser.id)) document.querySelector("#userSelect").value = currentUser.id;
+      }
+      async function loadPreferences() {
+        preferences = await supabaseFetch("/rest/v1/notification_preferences?select=*&order=updated_at.desc");
+        countLabel.textContent = `${preferences.length} preference${preferences.length === 1 ? "" : "s"}`;
+        renderRows();
+        hydrateForm(preferenceForSelectedUser());
+      }
+      function hydrateForm(item) {
+        if (!item) return;
+        document.querySelector("#inAppEnabled").checked = item.in_app_enabled;
+        document.querySelector("#emailEnabled").checked = item.email_enabled;
+        document.querySelector("#pushEnabled").checked = item.push_enabled;
+        document.querySelector("#smsEnabled").checked = item.sms_enabled;
+        document.querySelector("#digestSelect").value = item.digest_frequency;
+        document.querySelector("#quietStart").value = item.quiet_hours?.start || "18:00";
+        document.querySelector("#quietEnd").value = item.quiet_hours?.end || "09:00";
+        document.querySelector("#managerCanView").checked = Boolean(item.visibility?.managerCanView);
+        document.querySelector("#hrbpCanView").checked = item.visibility?.hrbpCanView !== false;
+      }
+      function renderRows() {
+        rows.innerHTML = preferences.map((item) => `<tr>
+          <td><code>${item.user_id}</code><div class="muted">${users.find((user) => user.id === item.user_id)?.email || ""}</div></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+          <td>
+            <div>In-app: ${item.in_app_enabled ? "on" : "off"} / Email: ${item.email_enabled ? "on" : "off"}</div>
+            <div class="muted">Push: ${item.push_enabled ? "on" : "off"} / SMS: ${item.sms_enabled ? "on" : "off"} / Digest: ${item.digest_frequency}</div>
+          </td>
+          <td>${item.quiet_hours?.start || "-"} -> ${item.quiet_hours?.end || "-"}<div class="muted">${item.quiet_hours?.timezone || "Asia/Tehran"}</div></td>
+          <td><code>${JSON.stringify(item.visibility || {})}</code></td>
+          <td class="actions">
+            <button data-action="submit" data-id="${item.id}">Submit</button>
+            ${item.status === "submitted" ? `<button data-action="approve" data-id="${item.id}">Approve</button><button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+            <button class="secondary" data-action="override" data-id="${item.id}">Override</button>
+            <button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button>
+          </td>
+        </tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function createDefaults() {
+        const userId = selectedUserId();
+        const state = stateByStatus.defaulted;
+        const payload = { user_id:userId, status:state.status, owner_role:state.owner, next_action:state.nextAction, metadata:{ owner:state.owner, nextAction:state.nextAction }, created_by:currentUser.id, updated_by:currentUser.id };
+        const [item] = await supabaseFetch("/rest/v1/notification_preferences?select=*", { method:"POST", headers:{ Prefer:"resolution=merge-duplicates,return=representation" }, body:JSON.stringify(payload) });
+        await writeAudit("notification.preference.created", item, null, state.status, { seed:false });
+        showMessage("Default notification preferences created.", "success");
+        await loadPreferences();
+      }
+      async function saveUpdate() {
+        const item = preferenceForSelectedUser();
+        if (!item) throw new Error("Create defaults first for this user.");
+        const state = stateByStatus.customized;
+        const patch = preferencePatch();
+        await patchPreference(item, patch, "notification.preference.updated", state);
+        showMessage("Notification preferences updated and audited.", "success");
+        await loadPreferences();
+      }
+      async function handleAction(id, action) {
+        const item = preferences.find((entry) => entry.id === id);
+        if (!item) throw new Error("Preference not found.");
+        if (action === "submit") await patchPreference(item, { submitted_at:new Date().toISOString() }, "notification.preference.submitted", stateByStatus.submitted);
+        if (action === "approve") await patchPreference(item, { approved_at:new Date().toISOString() }, "notification.preference.approved", stateByStatus.approved);
+        if (action === "return") {
+          const reason = prompt("Return reason", "Preference needs HRBP review notes before approval") || "";
+          if (reason.trim().length < 8) throw new Error("Return reason must be at least 8 characters.");
+          await patchPreference(item, { returned_at:new Date().toISOString(), last_return_reason:reason }, "notification.preference.returned", stateByStatus.returned, { reason }, reason);
+        }
+        if (action === "override") {
+          const reason = prompt("Override reason", "HR Admin override for notification policy") || "";
+          if (reason.trim().length < 8) throw new Error("Override reason must be at least 8 characters.");
+          await patchPreference(item, { ...preferencePatch(), overridden_at:new Date().toISOString() }, "notification.preference.overridden", stateByStatus.overridden, { reason }, reason);
+        }
+        if (action === "visibility") {
+          const visible = confirm("Allow manager visibility for these preference settings?");
+          await patchPreference(item, { visibility:{ managerCanView:visible, hrbpCanView:true, hrAdminCanView:true }, visibility_changed_at:new Date().toISOString() }, "notification.preference.visibility_changed", stateByStatus[item.status], { visibilityChanged:true });
+        }
+        showMessage("Preference workflow action saved and audit event written.", "success");
+        await loadPreferences();
+      }
+      async function patchPreference(item, patch, auditAction, state, metadata = {}, reason = null) {
+        await supabaseFetch(`/rest/v1/notification_preferences?id=eq.${item.id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ ...patch, status:state.status, owner_role:state.owner, next_action:state.nextAction, metadata:{ ...(item.metadata || {}), owner:state.owner, nextAction:state.nextAction }, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+        await writeAudit(auditAction, item, item.status, state.status, metadata, reason);
+      }
+      document.querySelector("#createButton").addEventListener("click", () => createDefaults().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#saveButton").addEventListener("click", () => saveUpdate().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#reloadButton").addEventListener("click", () => loadPreferences().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#userSelect").addEventListener("change", () => hydrateForm(preferenceForSelectedUser()));
+      (async function init() { try { await ensureToken(); await loadUsers(); await loadPreferences(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load preferences"; } })();
+    </script>
+  </body>
+</html>

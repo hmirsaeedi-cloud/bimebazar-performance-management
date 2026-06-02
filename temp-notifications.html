@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar In-app Notifications</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1180px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form,.filters { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:92px; resize:vertical; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.high,.pill.critical { background:#fff1d6; color:#7a4f00; }
+      .pill.archived { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:900px) { header,.toolbar { align-items:stretch; flex-direction:column; } form,.filters { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>In-app Notifications</h1>
+          <p>Inbox items with explicit unread/read/archive states, RBAC permissions, and immutable audit events.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Notification</h2>
+        <form id="createForm">
+          <label>Recipient<select id="recipientUserId" required></select></label>
+          <label>Priority<select id="priority"><option>normal</option><option>low</option><option>high</option><option>critical</option></select></label>
+          <label>Entity Type<input id="entityType" placeholder="evaluation" /></label>
+          <label>Entity ID<input id="entityId" placeholder="optional linked record" /></label>
+          <label class="full">Title<input id="title" required value="Evaluation task assigned" /></label>
+          <label class="full">Body<textarea id="body" required>Please review the assigned performance task.</textarea></label>
+          <label class="full">Action URL<input id="actionUrl" value="/temp-end-cycle-evaluation.html" /></label>
+          <button type="submit">Create notification</button>
+          <button class="secondary" id="reloadButton" type="button">Reload inbox</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div><h2>Inbox</h2><p id="countLabel">Loading...</p></div>
+          <div class="filters">
+            <label>Status<select id="statusFilter"><option value="">All</option><option>unread</option><option>read</option><option>archived</option></select></label>
+            <label>Priority<select id="priorityFilter"><option value="">All</option><option>low</option><option>normal</option><option>high</option><option>critical</option></select></label>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Notification</th><th>State</th><th>Linked record</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        unread: { status:"unread", owner:"RECIPIENT", nextAction:"mark_read" },
+        read: { status:"read", owner:"RECIPIENT", nextAction:"archive" },
+        archived: { status:"archived", owner:"SYSTEM", nextAction:null },
+      };
+
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      async function writeAudit(action, id, fromStatus, toStatus, metadata) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:metadata.recipientUserId, action, entity_type:"notification", entity_id:id, from_status:fromStatus, to_status:toStatus, metadata }) });
+      }
+      async function loadRecipients() {
+        const profiles = await supabaseFetch("/rest/v1/profiles?select=id,display_name,email,role_code,account_status&account_status=eq.active&order=display_name.asc&limit=200");
+        document.querySelector("#recipientUserId").innerHTML = profiles.map((profile) => `<option value="${profile.id}">${profile.display_name} · ${profile.role_code}</option>`).join("");
+      }
+      function filters() {
+        const params = new URLSearchParams();
+        params.set("select", "*");
+        params.set("order", "created_at.desc");
+        const status = document.querySelector("#statusFilter").value;
+        const priority = document.querySelector("#priorityFilter").value;
+        if (status) params.set("status", `eq.${status}`);
+        if (priority) params.set("priority", `eq.${priority}`);
+        return params.toString();
+      }
+      async function loadNotifications() {
+        const notifications = await supabaseFetch(`/rest/v1/notifications?${filters()}`);
+        countLabel.textContent = `${notifications.length} notification${notifications.length === 1 ? "" : "s"}`;
+        rows.innerHTML = notifications.map((item) => {
+          const actionButtons = item.status === "archived" ? "" : `${item.status === "unread" ? `<button data-action="mark_read" data-id="${item.id}">Mark read</button>` : ""}<button class="warning" data-action="archive" data-id="${item.id}">Archive</button>`;
+          return `<tr>
+            <td><strong>${item.title}</strong><p>${item.body}</p><div class="muted"><span class="pill ${item.priority}">${item.priority}</span></div></td>
+            <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+            <td>${item.entity_type || ""}<div class="muted"><code>${item.entity_id || ""}</code></div>${item.action_url ? `<div class="muted">${item.action_url}</div>` : ""}</td>
+            <td>${new Date(item.created_at).toLocaleString("fa-IR")}</td>
+            <td class="actions"><button class="secondary" data-action="update" data-id="${item.id}">Update</button>${actionButtons}</td>
+          </tr>`;
+        }).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function createNotification(event) {
+        event.preventDefault();
+        const recipientUserId = document.querySelector("#recipientUserId").value;
+        const state = stateByStatus.unread;
+        const id = crypto.randomUUID();
+        const body = {
+          id,
+          recipient_user_id: recipientUserId,
+          actor_user_id: currentUser.id,
+          status: state.status,
+          owner_role: state.owner,
+          next_action: state.nextAction,
+          priority: document.querySelector("#priority").value,
+          title: document.querySelector("#title").value.trim(),
+          body: document.querySelector("#body").value.trim(),
+          entity_type: document.querySelector("#entityType").value.trim() || null,
+          entity_id: document.querySelector("#entityId").value.trim() || null,
+          action_url: document.querySelector("#actionUrl").value.trim() || null,
+          metadata: { owner:state.owner, nextAction:state.nextAction, source:"temp-notifications" },
+          created_by: currentUser.id,
+          updated_by: currentUser.id,
+        };
+        await supabaseFetch("/rest/v1/notifications", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(body) });
+        await writeAudit("notification.created", id, null, state.status, { recipientUserId, owner:state.owner, nextAction:state.nextAction, priority:body.priority });
+        showMessage("Notification created and audit event written.", "success");
+        await loadNotifications();
+      }
+      async function handleAction(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/notifications?id=eq.${id}&select=*`);
+        if (!current) throw new Error("Notification not found");
+        if (action === "update") {
+          const title = prompt("Update notification title", current.title);
+          if (!title) return;
+          const state = stateByStatus[current.status];
+          await supabaseFetch(`/rest/v1/notifications?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ title, metadata:{ ...(current.metadata || {}), owner:state.owner, nextAction:state.nextAction }, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+          await writeAudit("notification.updated", id, current.status, state.status, { recipientUserId:current.recipient_user_id, owner:state.owner, nextAction:state.nextAction });
+        }
+        if (action === "mark_read") {
+          const state = stateByStatus.read;
+          await supabaseFetch(`/rest/v1/notifications?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:state.status, owner_role:state.owner, next_action:state.nextAction, read_at:new Date().toISOString(), metadata:{ ...(current.metadata || {}), owner:state.owner, nextAction:state.nextAction }, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+          await writeAudit("notification.marked_read", id, current.status, state.status, { recipientUserId:current.recipient_user_id, owner:state.owner, nextAction:state.nextAction });
+        }
+        if (action === "archive") {
+          const state = stateByStatus.archived;
+          await supabaseFetch(`/rest/v1/notifications?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:state.status, owner_role:state.owner, next_action:state.nextAction, archived_at:new Date().toISOString(), metadata:{ ...(current.metadata || {}), owner:state.owner, nextAction:state.nextAction }, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+          await writeAudit("notification.archived", id, current.status, state.status, { recipientUserId:current.recipient_user_id, owner:state.owner, nextAction:state.nextAction });
+        }
+        showMessage("Notification state saved and audit event written.", "success");
+        await loadNotifications();
+      }
+      document.querySelector("#createForm").addEventListener("submit", createNotification);
+      document.querySelector("#reloadButton").addEventListener("click", () => loadNotifications().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#statusFilter").addEventListener("change", () => loadNotifications().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#priorityFilter").addEventListener("change", () => loadNotifications().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadRecipients(); await loadNotifications(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load notifications"; } })();
+    </script>
+  </body>
+</html>

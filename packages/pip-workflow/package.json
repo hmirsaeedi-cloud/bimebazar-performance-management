@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/pip-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/pipWorkflow.d.ts",
+      "default": "./src/pipWorkflow.mjs"
+    }
+  }
+}

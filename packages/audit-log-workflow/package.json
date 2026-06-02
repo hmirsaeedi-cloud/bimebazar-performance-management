@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/audit-log-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/auditLogWorkflow.d.ts",
+      "default": "./src/auditLogWorkflow.mjs"
+    }
+  }
+}

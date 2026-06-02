@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Side-by-side Evaluation</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      .grid { display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:end; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      select,input { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.submitted,.pill.returned { background:#fff1d6; color:#7a4f00; }
+      .pill.completed { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Self-assessment vs. Manager</h1>
+          <p>Compare employee self-assessment answers with manager evaluation answers side-by-side, with score visibility gated until submit.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Comparison</h2>
+        <div class="grid">
+          <label>Self-assessment<select id="selfSelect"></select></label>
+          <label>Manager evaluation<select id="managerSelect"></select></label>
+          <button id="createButton" type="button">Generate comparison</button>
+        </div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Comparison Records</h2><p id="countLabel">Loading...</p></div><button class="secondary" id="reloadButton" type="button">Reload</button></div>
+        <table>
+          <thead><tr><th>Employee</th><th>State</th><th>Alignment</th><th>Scores</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Side-by-side Rows</h2>
+        <table>
+          <thead><tr><th>Section</th><th>Question</th><th>Self answer</th><th>Manager answer</th><th>Difference</th></tr></thead>
+          <tbody id="comparisonRows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let selfAssessments = [];
+      let managerEvaluations = [];
+      let comparisons = [];
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const comparisonRows = document.querySelector("#comparisonRows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        draft:{ status:"draft", owner:"MANAGER", nextAction:"update" },
+        in_review:{ status:"in_review", owner:"MANAGER", nextAction:"submit" },
+        submitted:{ status:"submitted", owner:"HRBP", nextAction:"approve" },
+        approved:{ status:"approved", owner:"HRBP", nextAction:"override_visibility" },
+        returned:{ status:"returned", owner:"MANAGER", nextAction:"update" },
+        visibility_approved:{ status:"visibility_approved", owner:"HRBP", nextAction:"complete" },
+        completed:{ status:"completed", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      function selectedSelf() { return selfAssessments.find((item) => item.id === document.querySelector("#selfSelect").value); }
+      function selectedManager() { return managerEvaluations.find((item) => item.id === document.querySelector("#managerSelect").value); }
+      function answerText(value) { return value === null || value === undefined ? "-" : JSON.stringify(value); }
+      function buildRows(schema, selfAnswers, managerAnswers) {
+        const output = [];
+        for (const section of schema?.sections || []) {
+          for (const question of section.questions || []) {
+            const selfAnswer = selfAnswers?.[question.id] ?? null;
+            const managerAnswer = managerAnswers?.[question.id] ?? null;
+            output.push({ sectionTitle:section.title, questionLabel:question.label || question.title || question.id, selfAnswer, managerAnswer, different:JSON.stringify(selfAnswer) !== JSON.stringify(managerAnswer) });
+          }
+        }
+        return output;
+      }
+      function summarize(rows) {
+        const differentCount = rows.filter((row) => row.different).length;
+        return { questionCount:rows.length, alignedCount:rows.length - differentCount, differentCount, alignmentRate:rows.length ? Number((((rows.length - differentCount) / rows.length) * 100).toFixed(2)) : 0 };
+      }
+      function score(schema, answers, reveal) {
+        if (!reveal) return { visible:false, totalScore:null, sections:[] };
+        let weightedTotal = 0, weightTotal = 0;
+        const sections = [];
+        for (const section of schema?.sections || []) {
+          let sectionWeightedTotal = 0, sectionWeightTotal = 0;
+          for (const question of section.questions || []) {
+            if (question.type !== "scale") continue;
+            const raw = answers?.[question.id];
+            const value = typeof raw === "number" ? raw : Number(raw?.value);
+            const selected = typeof raw === "number" || raw?.selected === true;
+            if (question.required && value === 0 && !selected) throw new Error("Required scale answer 0 must be intentionally selected.");
+            if (!Number.isFinite(value)) continue;
+            const min = Number(question.min || 0), max = Number(question.max || 5), weight = Number(question.weight || 0);
+            sectionWeightedTotal += (((value - min) / (max - min)) * 100) * weight;
+            sectionWeightTotal += weight;
+          }
+          sections.push({ sectionId:section.id, sectionTitle:section.title, contribution:sectionWeightTotal ? Number((sectionWeightedTotal / 100).toFixed(2)) : 0 });
+          weightedTotal += sectionWeightedTotal;
+          weightTotal += sectionWeightTotal;
+        }
+        return { visible:true, totalScore:weightTotal ? Number((weightedTotal / weightTotal).toFixed(2)) : null, sections };
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.employee_id, action, entity_type:"evaluation_comparison", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason, metadata:{ owner:stateByStatus[toStatus]?.owner, nextAction:stateByStatus[toStatus]?.nextAction || null, ...metadata } }) });
+      }
+      async function loadSources() {
+        selfAssessments = await supabaseFetch("/rest/v1/process_self_assessments?select=*&order=updated_at.desc");
+        managerEvaluations = await supabaseFetch("/rest/v1/end_cycle_evaluations?select=*&order=updated_at.desc");
+        document.querySelector("#selfSelect").innerHTML = selfAssessments.map((item) => `<option value="${item.id}">${item.status} - ${item.employee_id}</option>`).join("");
+        document.querySelector("#managerSelect").innerHTML = managerEvaluations.map((item) => `<option value="${item.id}">${item.status} - ${item.employee_id}</option>`).join("");
+      }
+      async function loadComparisons() {
+        comparisons = await supabaseFetch("/rest/v1/evaluation_comparisons?select=*&order=updated_at.desc");
+        countLabel.textContent = `${comparisons.length} comparison${comparisons.length === 1 ? "" : "s"}`;
+        rows.innerHTML = comparisons.map((item) => `<tr>
+          <td><code>${item.employee_id}</code><div class="muted">Manager: ${item.manager_id || "-"}</div></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+          <td>${item.alignment_summary?.alignmentRate ?? 0}% aligned<div class="muted">${item.alignment_summary?.differentCount ?? 0} difference(s)</div></td>
+          <td>${item.score_visible ? `Self: ${item.self_score?.totalScore ?? "-"} / Manager: ${item.manager_score?.totalScore ?? "-"}` : "Hidden until submit"}<div class="muted">${item.score_visible ? "Section contribution visible" : "Draft preview only"}</div></td>
+          <td class="actions">
+            <button data-action="view" data-id="${item.id}">View rows</button>
+            <button data-action="submit" data-id="${item.id}">Submit</button>
+            ${item.status === "submitted" ? `<button data-action="approve" data-id="${item.id}">Approve</button><button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+            ${item.status === "approved" ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button>` : ""}
+            ${item.status === "visibility_approved" ? `<button data-action="complete" data-id="${item.id}">Complete</button>` : ""}
+          </td>
+        </tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+        if (comparisons[0]) renderComparisonRows(comparisons[0]);
+      }
+      function renderComparisonRows(item) {
+        comparisonRows.innerHTML = (item.comparison_rows || []).map((row) => `<tr>
+          <td>${row.sectionTitle || "-"}</td>
+          <td>${row.questionLabel || row.questionId}</td>
+          <td><code>${answerText(row.selfAnswer)}</code></td>
+          <td><code>${answerText(row.managerAnswer)}</code></td>
+          <td>${row.different ? "Different" : "Aligned"}</td>
+        </tr>`).join("");
+      }
+      async function createComparison() {
+        const self = selectedSelf();
+        const manager = selectedManager();
+        if (!self || !manager) throw new Error("Choose both a self-assessment and manager evaluation.");
+        if (self.employee_id !== manager.employee_id) throw new Error("Both records must belong to the same employee.");
+        const state = stateByStatus.draft;
+        const rows = buildRows(manager.locked_form_schema, self.responses || {}, manager.answers || {});
+        const payload = {
+          process_id:manager.process_id || self.process_id || null,
+          employee_id:manager.employee_id,
+          manager_id:manager.manager_id || self.manager_id || null,
+          hrbp_id:manager.hrbp_id || null,
+          self_assessment_id:self.id,
+          manager_evaluation_id:manager.id,
+          form_template_version_id:manager.form_template_version_id,
+          locked_form_schema:manager.locked_form_schema,
+          status:state.status,
+          owner_role:state.owner,
+          next_action:state.nextAction,
+          self_answers:self.responses || {},
+          manager_answers:manager.answers || {},
+          comparison_rows:rows,
+          alignment_summary:summarize(rows),
+          self_score:score(manager.locked_form_schema, self.responses || {}, false),
+          manager_score:score(manager.locked_form_schema, manager.answers || {}, false),
+          score_visible:false,
+          created_by:currentUser.id,
+          updated_by:currentUser.id,
+        };
+        const [item] = await supabaseFetch("/rest/v1/evaluation_comparisons?select=*", { method:"POST", headers:{ Prefer:"resolution=merge-duplicates,return=representation" }, body:JSON.stringify(payload) });
+        await writeAudit("evaluation.comparison.created", item, null, state.status, { scoreVisible:false, alignmentSummary:item.alignment_summary });
+        showMessage("Side-by-side comparison created with hidden draft scores.", "success");
+        await loadComparisons();
+      }
+      async function handleAction(id, action) {
+        const item = comparisons.find((entry) => entry.id === id);
+        if (!item) throw new Error("Comparison not found.");
+        if (action === "view") { renderComparisonRows(item); return; }
+        if (action === "submit") {
+          const state = stateByStatus.submitted;
+          await patchComparison(item, { submitted_at:new Date().toISOString(), self_score:score(item.locked_form_schema, item.self_answers, true), manager_score:score(item.locked_form_schema, item.manager_answers, true), score_visible:true }, "evaluation.comparison.submitted", state);
+        }
+        if (action === "approve") await patchComparison(item, { approved_at:new Date().toISOString() }, "evaluation.comparison.approved", stateByStatus.approved);
+        if (action === "return") {
+          const reason = prompt("Return reason", "Manager needs to clarify answer differences") || "";
+          if (reason.trim().length < 8) throw new Error("Return reason must be at least 8 characters.");
+          await patchComparison(item, { returned_at:new Date().toISOString(), last_return_reason:reason }, "evaluation.comparison.returned", stateByStatus.returned, { reason }, reason);
+        }
+        if (action === "visibility") await patchComparison(item, { visibility:{ employeeCanView:true, managerCanView:true, hrbpCanView:true }, visibility_changed_at:new Date().toISOString() }, "evaluation.comparison.visibility_changed", stateByStatus.visibility_approved);
+        if (action === "complete") await patchComparison(item, { completed_at:new Date().toISOString() }, "evaluation.comparison.completed", stateByStatus.completed);
+        showMessage("Comparison workflow action saved and audit event written.", "success");
+        await loadComparisons();
+      }
+      async function patchComparison(item, patch, auditAction, state, metadata = {}, reason = null) {
+        await supabaseFetch(`/rest/v1/evaluation_comparisons?id=eq.${item.id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ ...patch, status:state.status, owner_role:state.owner, next_action:state.nextAction, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+        await writeAudit(auditAction, item, item.status, state.status, { scoreVisible:patch.score_visible ?? item.score_visible, ...metadata }, reason);
+      }
+      document.querySelector("#createButton").addEventListener("click", () => createComparison().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#reloadButton").addEventListener("click", () => loadComparisons().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadSources(); await loadComparisons(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load comparisons"; } })();
+    </script>
+  </body>
+</html>

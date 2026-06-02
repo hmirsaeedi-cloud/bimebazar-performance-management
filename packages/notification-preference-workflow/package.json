@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/notification-preference-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/notificationPreferenceWorkflow.d.ts",
+      "default": "./src/notificationPreferenceWorkflow.mjs"
+    }
+  }
+}

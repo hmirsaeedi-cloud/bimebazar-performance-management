@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/dashboard-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/dashboardWorkflow.d.ts",
+      "default": "./src/dashboardWorkflow.mjs"
+    }
+  }
+}

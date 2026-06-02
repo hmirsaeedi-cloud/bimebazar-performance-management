@@ -1,0 +1,13 @@
+{
+  "name": "@bimebazar/mpa-history-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/mpaHistoryWorkflow.mjs",
+  "types": "src/mpaHistoryWorkflow.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/mpaHistoryWorkflow.mjs",
+      "types": "./src/mpaHistoryWorkflow.d.ts"
+    }
+  }
+}

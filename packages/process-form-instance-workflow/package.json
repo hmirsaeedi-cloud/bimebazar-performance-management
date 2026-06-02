@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/process-form-instance-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/processFormInstanceWorkflow.d.ts",
+      "default": "./src/processFormInstanceWorkflow.mjs"
+    }
+  }
+}

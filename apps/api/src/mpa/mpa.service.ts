@@ -4,10 +4,17 @@ import {
   mpaAttachmentStatuses,
   transitionMpaAttachmentState,
 } from "@bimebazar/mpa-attachment-workflow";
+import {
+  getMpaHistoryState,
+  mpaHistoryActions,
+  mpaHistoryStatuses,
+  summarizeMpaSnapshot,
+  transitionMpaHistoryState,
+} from "@bimebazar/mpa-history-workflow";
 import { mpaActions, mpaStatuses, getMpaState, transitionMpaState } from "@bimebazar/mpa-workflow";
 import { htmlToPlainText } from "@bimebazar/rich-text-utils";
 import { writeAuditEvent } from "../audit/audit.service.js";
-import { notifyMpaAttachmentChanged, notifyMpaChanged } from "../notifications/notification.service.js";
+import { notifyMpaAttachmentChanged, notifyMpaChanged, notifyMpaHistoryChanged } from "../notifications/notification.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 import type { AuthUser } from "../auth/auth.types.js";
 
@@ -22,6 +29,12 @@ const mpaSelect = `
 const mpaAttachmentSelect = `
   id,mpa_id,process_id,employee_id,cycle_id,evaluation_type,evaluation_id,status,owner_role,next_action,
   match_strategy,attached_by,attached_at,metadata,created_at,updated_at
+`;
+
+const mpaHistorySelect = `
+  id,mpa_id,employee_id,cycle_id,version_number,status,owner_role,next_action,source_mpa_status,title,
+  content,content_format,content_plain_text,approval_visibility,snapshot,comparison_summary,
+  restored_at,reviewed_at,returned_at,archived_at,last_return_reason,created_by,updated_by,created_at,updated_at
 `;
 
 export async function listMpaCycles() {
@@ -77,6 +90,19 @@ export async function getMpa(id: string) {
   const { data, error } = await admin.from("mpas").select(mpaSelect).eq("id", id).single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function listMpaHistoryVersions(input: { actor: AuthUser; mpaId: string; status?: string }) {
+  const admin = createSupabaseAdminClient();
+  let query = admin
+    .from("mpa_history_versions")
+    .select(mpaHistorySelect)
+    .eq("mpa_id", input.mpaId)
+    .order("version_number", { ascending: false });
+  if (input.status) query = query.eq("status", input.status);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 export async function createMpa(input: {
@@ -181,6 +207,171 @@ export async function updateMpa(input: { actor: AuthUser; id: string; patch: { t
   }
   await notifyMpaChanged(toNotificationPayload(data, "updated"));
 
+  return data;
+}
+
+export async function captureMpaHistoryVersion(input: {
+  actor: AuthUser;
+  mpaId: string;
+  comparisonSummary?: Record<string, unknown>;
+}) {
+  const current = await getMpa(input.mpaId);
+  const admin = createSupabaseAdminClient();
+  const state = getMpaHistoryState(mpaHistoryStatuses.CAPTURED);
+  const versionNumber = await nextMpaHistoryVersionNumber(input.mpaId);
+  const snapshot = summarizeMpaSnapshot({
+    title: current.title,
+    status: current.status,
+    contentPlainText: current.content_plain_text ?? "",
+  });
+  const { data, error } = await admin
+    .from("mpa_history_versions")
+    .insert({
+      mpa_id: current.id,
+      employee_id: current.employee_id,
+      cycle_id: current.cycle_id,
+      version_number: versionNumber,
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      source_mpa_status: current.status,
+      title: current.title,
+      content: current.content,
+      content_format: current.content_format ?? getContentFormat(current.content),
+      content_plain_text: current.content_plain_text ?? getContentPlainText(current.content),
+      approval_visibility: current.approval_visibility ?? defaultApprovalVisibility(),
+      snapshot,
+      comparison_summary: input.comparisonSummary ?? {},
+      created_by: input.actor.id,
+      updated_by: input.actor.id,
+    })
+    .select(mpaHistorySelect)
+    .single();
+  if (error) throw new Error(error.message);
+
+  await auditMpaHistory({
+    actor: input.actor,
+    version: data,
+    action: "mpa.history_captured",
+    fromStatus: null,
+    toState: state,
+  });
+  await notifyMpaHistoryChanged(toMpaHistoryNotification(data, "captured"));
+  return data;
+}
+
+export async function reviewMpaHistoryVersion(input: { actor: AuthUser; id: string }) {
+  return moveMpaHistory(input.actor, input.id, mpaHistoryActions.APPROVE, "mpa.history_reviewed", "reviewed", {
+    reviewed_at: new Date().toISOString(),
+  });
+}
+
+export async function returnMpaHistoryVersion(input: { actor: AuthUser; id: string; reason: string }) {
+  return moveMpaHistory(input.actor, input.id, mpaHistoryActions.RETURN, "mpa.history_returned", "returned", {
+    returned_at: new Date().toISOString(),
+    last_return_reason: input.reason,
+    reason: input.reason,
+  });
+}
+
+export async function archiveMpaHistoryVersion(input: { actor: AuthUser; id: string }) {
+  return moveMpaHistory(input.actor, input.id, mpaHistoryActions.ARCHIVE, "mpa.history_archived", "archived", {
+    archived_at: new Date().toISOString(),
+  });
+}
+
+export async function restoreMpaHistoryVersion(input: { actor: AuthUser; mpaId: string; versionId: string }) {
+  const admin = createSupabaseAdminClient();
+  const version = await getMpaHistoryVersion(input.versionId);
+  if (version.mpa_id !== input.mpaId) throw new Error("MPA history version does not belong to this MPA");
+  const current = await getMpa(input.mpaId);
+  if (![mpaStatuses.DRAFT, mpaStatuses.RETURNED, mpaStatuses.ACTIVE].includes(current.status)) {
+    throw new Error("Only draft, returned, or active MPAs can restore a historical version");
+  }
+  const historyState = transitionMpaHistoryState(version.status, mpaHistoryActions.RESTORE);
+  const { data: updatedMpa, error: updateError } = await admin
+    .from("mpas")
+    .update({
+      title: version.title,
+      content: version.content,
+      content_format: version.content_format,
+      content_plain_text: version.content_plain_text,
+      approval_visibility: version.approval_visibility,
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.mpaId)
+    .select(mpaSelect)
+    .single();
+  if (updateError) throw new Error(updateError.message);
+
+  const { data: updatedVersion, error: versionError } = await admin
+    .from("mpa_history_versions")
+    .update({
+      status: historyState.status,
+      owner_role: historyState.owner,
+      next_action: historyState.nextAction,
+      restored_at: new Date().toISOString(),
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.versionId)
+    .select(mpaHistorySelect)
+    .single();
+  if (versionError) throw new Error(versionError.message);
+
+  await writeMpaContentRevision({ actor: input.actor, mpa: updatedMpa });
+  await auditMpaHistory({
+    actor: input.actor,
+    version: updatedVersion,
+    action: "mpa.history_restored",
+    fromStatus: version.status,
+    toState: historyState,
+  });
+  await auditMpaTransition({
+    actor: input.actor,
+    mpa: updatedMpa,
+    action: "mpa.updated",
+    fromStatus: current.status,
+    toState: getMpaState(updatedMpa.status),
+    metadata: { restoredFromVersion: version.version_number },
+  });
+  await notifyMpaHistoryChanged(toMpaHistoryNotification(updatedVersion, "restored"));
+  await notifyMpaChanged(toNotificationPayload(updatedMpa, "updated"));
+  return updatedMpa;
+}
+
+export async function updateMpaHistoryVisibility(input: { actor: AuthUser; id: string; visibleToEmployee: boolean }) {
+  const current = await getMpaHistoryVersion(input.id);
+  const state = transitionMpaHistoryState(current.status, mpaHistoryActions.OVERRIDE_VISIBILITY);
+  const visibility = {
+    ...(current.approval_visibility ?? {}),
+    employeeCanViewHistoryVersion: input.visibleToEmployee,
+  };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("mpa_history_versions")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      approval_visibility: visibility,
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(mpaHistorySelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditMpaHistory({
+    actor: input.actor,
+    version: data,
+    action: "mpa.history_visibility_changed",
+    fromStatus: current.status,
+    toState: state,
+    metadata: { from: current.approval_visibility, to: data.approval_visibility },
+  });
+  await notifyMpaHistoryChanged(toMpaHistoryNotification(data, "visibility_changed"));
   return data;
 }
 
@@ -420,6 +611,85 @@ async function auditMpaAttachment(input: {
   });
 }
 
+async function getMpaHistoryVersion(id: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("mpa_history_versions").select(mpaHistorySelect).eq("id", id).single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function nextMpaHistoryVersionNumber(mpaId: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("mpa_history_versions")
+    .select("version_number")
+    .eq("mpa_id", mpaId)
+    .order("version_number", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return Number(data?.[0]?.version_number ?? 0) + 1;
+}
+
+async function moveMpaHistory(
+  actor: AuthUser,
+  id: string,
+  workflowAction: string,
+  auditAction: string,
+  notificationAction: Parameters<typeof notifyMpaHistoryChanged>[0]["action"],
+  patch: Record<string, unknown>,
+) {
+  const current = await getMpaHistoryVersion(id);
+  const state = transitionMpaHistoryState(current.status, workflowAction);
+  const { reason, ...dbPatch } = patch;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("mpa_history_versions")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      ...dbPatch,
+      updated_by: actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select(mpaHistorySelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditMpaHistory({ actor, version: data, action: auditAction, fromStatus: current.status, toState: state, reason: typeof reason === "string" ? reason : undefined });
+  await notifyMpaHistoryChanged(toMpaHistoryNotification(data, notificationAction));
+  return data;
+}
+
+async function auditMpaHistory(input: {
+  actor: AuthUser;
+  version: { id: string; mpa_id: string; employee_id: string; cycle_id: string; version_number: number };
+  action: string;
+  fromStatus: string | null;
+  toState: { status: string; owner: string; nextAction: string | null };
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  await writeAuditEvent({
+    actorUserId: input.actor.id,
+    targetUserId: input.version.employee_id,
+    action: input.action,
+    entityType: "mpa_history_version",
+    entityId: input.version.id,
+    fromStatus: input.fromStatus,
+    toStatus: input.toState.status,
+    reason: input.reason,
+    metadata: {
+      mpaId: input.version.mpa_id,
+      cycleId: input.version.cycle_id,
+      versionNumber: input.version.version_number,
+      owner: input.toState.owner,
+      nextAction: input.toState.nextAction,
+      ...(input.metadata ?? {}),
+    },
+  });
+}
+
 function toAttachmentNotification(
   attachment: {
     id: string;
@@ -444,6 +714,32 @@ function toAttachmentNotification(
     status: attachment.status,
     owner: attachment.owner_role,
     nextAction: attachment.next_action,
+    action,
+  };
+}
+
+function toMpaHistoryNotification(
+  version: {
+    id: string;
+    mpa_id: string;
+    employee_id: string;
+    cycle_id: string;
+    version_number: number;
+    status: string;
+    owner_role: string;
+    next_action: string | null;
+  },
+  action: Parameters<typeof notifyMpaHistoryChanged>[0]["action"],
+) {
+  return {
+    versionId: version.id,
+    mpaId: version.mpa_id,
+    employeeId: version.employee_id,
+    cycleId: version.cycle_id,
+    versionNumber: version.version_number,
+    status: version.status,
+    owner: version.owner_role,
+    nextAction: version.next_action,
     action,
   };
 }

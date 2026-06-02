@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Performance Band Flags</title>
+    <style>
+      :root { --bg:#f7f8f4; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d9e1dc; --teal:#087c7c; --green:#276749; --gold:#b7791f; --red:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1260px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,2.9rem); letter-spacing:0; }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:86px; resize:vertical; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      button.danger { background:var(--red); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.75rem; word-break:break-all; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.pip { background:#fff0ee; color:var(--red); }
+      .pill.promotion,.pill.approved,.pill.converted { background:#eaf7ef; color:var(--green); }
+      .pill.returned { background:#fff1d6; color:#7a4f00; }
+      .muted { color:var(--muted); font-size:.76rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--red); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Performance Band Auto-Flags</h1>
+          <p>Generate PIP or Promotion recommendations only after submitted weighted scores become visible.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Generate Flag</h2>
+        <form id="flagForm">
+          <label class="full">Submitted Evaluation<select id="evaluationId"></select></label>
+          <label>PIP Max<input id="pipMax" type="number" min="0" max="100" step="0.01" value="59.99" /></label>
+          <label>Promotion Min<input id="promotionMin" type="number" min="0" max="100" step="0.01" value="90" /></label>
+          <button type="submit">Generate flag</button>
+          <button class="secondary" id="demoButton" type="button">Create demo low score</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Flags</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Flag</th><th>Score</th><th>State</th><th>Visibility</th><th>Rationale</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null, evaluations = [], flags = [], profiles = [], formVersions = [];
+      const message = document.querySelector("#message"), rows = document.querySelector("#rows"), countLabel = document.querySelector("#countLabel");
+      const states = {
+        detected:{ status:"detected", owner:"HRBP", nextAction:"submit" },
+        under_review:{ status:"under_review", owner:"HRBP", nextAction:"approve" },
+        approved:{ status:"approved", owner:"HR_ADMIN", nextAction:"convert" },
+        returned:{ status:"returned", owner:"HRBP", nextAction:"update" },
+        converted:{ status:"converted", owner:"SYSTEM", nextAction:null },
+        dismissed:{ status:"dismissed", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.employee_id, action, entity_type:"performance_band_flag", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason:metadata.reason || null, metadata:{ evaluationId:item.evaluation_id, flagType:item.flag_type, weightedScore:item.weighted_score, owner:metadata.owner, nextAction:metadata.nextAction, ...metadata } }) });
+      }
+      function classify(score) {
+        const pipMax = Number(document.querySelector("#pipMax").value);
+        const promotionMin = Number(document.querySelector("#promotionMin").value);
+        if (score <= pipMax) return { flag_type:"pip", band_label:"PIP watch", rationale:`Weighted score ${score} is at or below the PIP threshold ${pipMax}.` };
+        if (score >= promotionMin) return { flag_type:"promotion", band_label:"Promotion ready", rationale:`Weighted score ${score} is at or above the promotion threshold ${promotionMin}.` };
+        return { flag_type:"none", band_label:"No action", rationale:`Weighted score ${score} is between thresholds.` };
+      }
+      async function loadLookups() {
+        [evaluations, profiles, formVersions] = await Promise.all([
+          supabaseFetch("/rest/v1/end_cycle_evaluations?select=*&order=updated_at.desc"),
+          supabaseFetch("/rest/v1/profiles?account_status=eq.active&select=id,display_name,email,role_code,manager_id,hrbp_id&order=display_name.asc"),
+          supabaseFetch("/rest/v1/form_template_versions?select=id,schema,version_number,status&order=created_at.desc"),
+        ]);
+        const visible = evaluations.filter((item) => item.score?.visible && item.score?.totalScore !== null);
+        document.querySelector("#evaluationId").innerHTML = visible.map((item) => `<option value="${item.id}">${profileName(item.employee_id)} · score ${item.score.totalScore} · ${item.status}</option>`).join("") || `<option value="">No submitted visible-score evaluation yet</option>`;
+      }
+      async function loadFlags() {
+        flags = await supabaseFetch("/rest/v1/performance_band_flags?select=*&order=updated_at.desc");
+        countLabel.textContent = `${flags.length} auto-flag${flags.length === 1 ? "" : "s"}`;
+        rows.innerHTML = flags.map(renderRow).join("") || `<tr><td colspan="6">No flags yet. Create a demo score, then generate a flag.</td></tr>`;
+      }
+      function profileName(id) {
+        const profile = profiles.find((item) => item.id === id);
+        return profile?.display_name || profile?.email || id;
+      }
+      function renderRow(item) {
+        return `<tr>
+          <td><span class="pill ${item.flag_type}">${item.flag_type}</span><div><strong>${item.band_label}</strong></div><code>${item.id}</code></td>
+          <td><strong>${item.weighted_score}</strong><div class="muted">${item.score_engine_version}</div></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} · ${item.next_action || "done"}</div></td>
+          <td><span class="muted">Employee ${item.visibility.employeeCanView ? "visible" : "hidden"}</span><br /><span class="muted">Manager ${item.visibility.managerCanView ? "visible" : "hidden"}</span></td>
+          <td>${item.rationale}<div class="muted">Sections visible only after submission: ${(item.section_contributions || []).length}</div></td>
+          <td><div class="actions">
+            <button data-action="submit" data-id="${item.id}">Submit</button>
+            <button data-action="approve" data-id="${item.id}">Approve</button>
+            <button data-action="convert" data-id="${item.id}">Convert</button>
+            <button class="warning" data-action="return" data-id="${item.id}">Return</button>
+            <button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button>
+            <button class="danger" data-action="dismiss" data-id="${item.id}">Dismiss</button>
+          </div></td>
+        </tr>`;
+      }
+      async function generateFlag(event) {
+        event.preventDefault();
+        const evaluation = evaluations.find((item) => item.id === document.querySelector("#evaluationId").value);
+        if (!evaluation?.score?.visible || evaluation.score.totalScore === null) throw new Error("Auto-flags run only after submitted weighted score is visible.");
+        const classification = classify(Number(evaluation.score.totalScore));
+        if (classification.flag_type === "none") showMessage("This score is between thresholds, so the generated flag is informational only.", "success");
+        const state = states.detected;
+        const id = crypto.randomUUID();
+        const body = { id, evaluation_id:evaluation.id, process_id:evaluation.process_id, employee_id:evaluation.employee_id, manager_id:evaluation.manager_id, hrbp_id:evaluation.hrbp_id, ...classification, weighted_score:evaluation.score.totalScore, score_engine_version:evaluation.score_engine_version || "weighted-v1", section_contributions:evaluation.score.sections || [], thresholds:{ pipMax:Number(document.querySelector("#pipMax").value), promotionMin:Number(document.querySelector("#promotionMin").value) }, status:state.status, owner_role:state.owner, next_action:state.nextAction, created_by:currentUser.id, updated_by:currentUser.id };
+        await supabaseFetch("/rest/v1/performance_band_flags", { method:"POST", headers:{ Prefer:"resolution=merge-duplicates,return=representation" }, body:JSON.stringify(body) });
+        await writeAudit("evaluation.band_flag.created", body, null, state.status, { owner:state.owner, nextAction:state.nextAction, scoreVisible:true, sectionContributionsVisible:true });
+        showMessage("Performance band flag generated and audit event written.", "success");
+        await loadFlags();
+      }
+      async function createDemoEvaluation() {
+        const employee = profiles.find((item) => item.id !== currentUser.id) || profiles[0];
+        const formVersion = formVersions.find((item) => item.schema?.sections?.length) || formVersions[0];
+        if (!employee || !formVersion) throw new Error("Need at least one active employee and form version.");
+        const id = crypto.randomUUID();
+        const answers = { results_rating:{ value:1, selected:true }, behavior_rating:{ value:2, selected:true }, results_evidence:"Demo low score", behavior_evidence:"Demo low score" };
+        const score = { engineVersion:"weighted-v1", mode:"submitted", visible:true, totalScore:28, weightTotal:100, sections:[{ sectionId:"results", sectionTitle:"Results", weight:60, contribution:12, questions:[] }, { sectionId:"behaviors", sectionTitle:"Behaviors", weight:40, contribution:16, questions:[] }] };
+        await supabaseFetch("/rest/v1/end_cycle_evaluations", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ id, employee_id:employee.id, manager_id:employee.manager_id || currentUser.id, hrbp_id:employee.hrbp_id || currentUser.id, form_template_version_id:formVersion.id, locked_form_schema:formVersion.schema, status:"submitted", owner_role:"NEXT_LEVEL_MANAGER", next_action:"next_level_approve", answers, score, score_engine_version:"weighted-v1", score_calculated_at:new Date().toISOString(), submitted_at:new Date().toISOString(), created_by:currentUser.id, updated_by:currentUser.id }) });
+        showMessage("Demo submitted evaluation created. Now click Generate flag.", "success");
+        await loadLookups();
+      }
+      async function moveFlag(action, id) {
+        const current = flags.find((item) => item.id === id);
+        const now = new Date().toISOString();
+        const target = action === "submit" ? states.under_review : action === "approve" ? states.approved : action === "return" ? states.returned : action === "convert" ? states.converted : action === "dismiss" ? states.dismissed : states[current.status];
+        const patch = { status:target.status, owner_role:target.owner, next_action:target.nextAction, updated_by:currentUser.id, updated_at:now };
+        if (action === "submit") patch.submitted_at = now;
+        if (action === "approve") patch.approved_at = now;
+        if (action === "return") { patch.returned_at = now; patch.last_return_reason = "Needs HRBP evidence review."; }
+        if (action === "convert") { patch.converted_at = now; patch.conversion_target_type = current.flag_type; }
+        if (action === "dismiss") { patch.dismissed_at = now; patch.dismissal_reason = "HR decided no career workflow is needed."; }
+        if (action === "visibility") { patch.visibility = { employeeCanView:false, managerCanView:true, hrbpCanView:true, hrAdminCanView:true }; patch.visibility_changed_at = now; }
+        await supabaseFetch(`/rest/v1/performance_band_flags?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        const auditAction = action === "visibility" ? "evaluation.band_flag.visibility_changed" : `evaluation.band_flag.${action === "return" ? "returned" : action === "dismiss" ? "dismissed" : action === "convert" ? "converted" : action + "d"}`;
+        await writeAudit(auditAction, current, current.status, target.status, { owner:target.owner, nextAction:target.nextAction, reason:patch.last_return_reason || patch.dismissal_reason || null });
+        showMessage("Band flag action saved and audit event written.", "success");
+        await loadFlags();
+      }
+      document.querySelector("#flagForm").addEventListener("submit", (event) => generateFlag(event).catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#demoButton").addEventListener("click", () => createDemoEvaluation().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#reloadButton").addEventListener("click", () => Promise.all([loadLookups(), loadFlags()]).catch((error) => showMessage(error.message, "error")));
+      rows.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (button) moveFlag(button.dataset.action, button.dataset.id).catch((error) => showMessage(error.message, "error"));
+      });
+      (async function init() { try { await ensureToken(); await loadLookups(); await loadFlags(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load flags"; } })();
+    </script>
+  </body>
+</html>

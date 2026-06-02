@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Individual Surveys</title>
+    <style>
+      :root { --bg:#f6f8f4; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d9e1dc; --teal:#087c7c; --green:#276749; --gold:#b7791f; --red:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1260px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,2.9rem); letter-spacing:0; }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form { display:grid; grid-template-columns:repeat(3,minmax(180px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:84px; resize:vertical; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.75rem; word-break:break-all; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.active,.pill.approved { background:#eaf7ef; color:var(--green); }
+      .pill.returned { background:#fff1d6; color:#7a4f00; }
+      .pill.cancelled { background:#fff0ee; color:var(--red); }
+      .muted { color:var(--muted); font-size:.76rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--red); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Individual Process Surveys</h1>
+          <p>Launch targeted one-off surveys, lock the selected form version, route employee responses, and audit every state change.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Survey</h2>
+        <form id="surveyForm">
+          <label>Title<input id="title" value="S6 individual pulse survey" required /></label>
+          <label>Form Template<select id="templateId" required></select></label>
+          <label>Locked Version<select id="versionId" required></select></label>
+          <label class="full">Employees<select id="employeeIds" multiple size="5" required></select></label>
+          <label class="full">Description<textarea id="description">Targeted survey for a single employee or small cohort.</textarea></label>
+          <button type="submit">Create draft</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Survey Processes</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Survey</th><th>State</th><th>Recipients</th><th>Locked Form</th><th>Responses</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null, profiles = [], templates = [], surveys = [];
+      const message = document.querySelector("#message"), rows = document.querySelector("#rows"), countLabel = document.querySelector("#countLabel");
+      const states = {
+        draft:{ status:"draft", owner:"HR_ADMIN", nextAction:"configure" },
+        configured:{ status:"configured", owner:"HR_ADMIN", nextAction:"start" },
+        active:{ status:"active", owner:"EMPLOYEE", nextAction:"submit" },
+        submitted:{ status:"submitted", owner:"HRBP", nextAction:"approve" },
+        approved:{ status:"approved", owner:"HRBP", nextAction:"complete" },
+        returned:{ status:"returned", owner:"EMPLOYEE", nextAction:"submit" },
+        completed:{ status:"completed", owner:"SYSTEM", nextAction:null },
+        cancelled:{ status:"cancelled", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      async function writeAudit(action, entityType, entityId, fromStatus, toStatus, metadata = {}, targetUserId = null) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:targetUserId, action, entity_type:entityType, entity_id:entityId, from_status:fromStatus, to_status:toStatus, reason:metadata.reason || null, metadata }) });
+      }
+      function selectedEmployees() { return Array.from(document.querySelector("#employeeIds").selectedOptions).map((option) => option.value); }
+      function templateVersions() {
+        const template = templates.find((item) => item.id === document.querySelector("#templateId").value);
+        return template?.form_template_versions || [];
+      }
+      function syncVersions() {
+        const versions = templateVersions();
+        document.querySelector("#versionId").innerHTML = versions.map((version) => `<option value="${version.id}">v${version.version_number} · ${version.status}</option>`).join("");
+      }
+      async function loadLookups() {
+        [profiles, templates] = await Promise.all([
+          supabaseFetch("/rest/v1/profiles?account_status=eq.active&select=id,display_name,email,primary_role&order=display_name.asc"),
+          supabaseFetch("/rest/v1/form_templates?select=id,name,current_version_id,form_template_versions(id,version_number,status)&order=updated_at.desc"),
+        ]);
+        document.querySelector("#employeeIds").innerHTML = profiles.map((profile, index) => `<option value="${profile.id}" ${index < 2 ? "selected" : ""}>${profile.display_name || profile.email}</option>`).join("");
+        document.querySelector("#templateId").innerHTML = templates.map((template) => `<option value="${template.id}">${template.name}</option>`).join("");
+        syncVersions();
+      }
+      async function loadSurveys() {
+        surveys = await supabaseFetch("/rest/v1/individual_survey_processes?select=*,individual_survey_responses(*)&order=updated_at.desc");
+        countLabel.textContent = `${surveys.length} survey process${surveys.length === 1 ? "" : "es"}`;
+        rows.innerHTML = surveys.map(renderRow).join("") || `<tr><td colspan="6">No individual surveys yet.</td></tr>`;
+      }
+      function renderRow(item) {
+        const responses = item.individual_survey_responses || [];
+        const responseSummary = responses.map((response) => `<div><span class="pill ${response.status}">${response.status}</span> <code>${response.id}</code></div>`).join("") || "<span class='muted'>Start to create responses</span>";
+        return `<tr>
+          <td><strong>${item.title}</strong><div class="muted">${item.description || ""}</div><code>${item.id}</code></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} · ${item.next_action || "done"}</div></td>
+          <td>${item.eligible_employee_count}<div class="muted">${(item.target_employee_ids || []).length ? "Non-zero eligibility locked" : "No recipients"}</div></td>
+          <td><code>${item.locked_form_template_version_id}</code><div class="muted">In-flight surveys keep this version.</div></td>
+          <td>${responseSummary}</td>
+          <td><div class="actions">
+            <button data-action="configure" data-id="${item.id}">Configure</button>
+            <button data-action="start" data-id="${item.id}">Start</button>
+            <button data-action="submit" data-id="${responses[0]?.id || ""}">Submit response</button>
+            <button data-action="approve" data-id="${responses[0]?.id || ""}">Approve</button>
+            <button class="warning" data-action="return" data-id="${responses[0]?.id || ""}">Return</button>
+            <button data-action="complete" data-id="${item.id}">Complete</button>
+            <button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button>
+            <button class="secondary" data-action="cancel" data-id="${item.id}">Cancel</button>
+          </div></td>
+        </tr>`;
+      }
+      async function createSurvey(event) {
+        event.preventDefault();
+        const ids = selectedEmployees();
+        if (!ids.length) throw new Error("Select at least one employee. Processes cannot start with zero eligible employees.");
+        const state = states.draft;
+        const id = crypto.randomUUID();
+        const formTemplateId = document.querySelector("#templateId").value;
+        const formTemplateVersionId = document.querySelector("#versionId").value;
+        await supabaseFetch("/rest/v1/individual_survey_processes", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ id, title:document.querySelector("#title").value, description:document.querySelector("#description").value, status:state.status, owner_role:state.owner, next_action:state.nextAction, form_template_id:formTemplateId, form_template_version_id:formTemplateVersionId, locked_form_template_version_id:formTemplateVersionId, target_employee_ids:ids, eligible_employee_count:ids.length, survey_settings:{ anonymous:false, channel:"individual" }, created_by:currentUser.id, updated_by:currentUser.id }) });
+        await writeAudit("process.survey.created", "individual_survey_process", id, null, state.status, { owner:state.owner, nextAction:state.nextAction, lockedFormTemplateVersionId:formTemplateVersionId, eligibleEmployeeCount:ids.length });
+        showMessage("Individual survey draft created and audit event written.", "success");
+        await loadSurveys();
+      }
+      async function actionSurvey(action, id) {
+        if (!id) throw new Error("Start the survey first so a response exists.");
+        const survey = surveys.find((item) => item.id === id);
+        const response = surveys.flatMap((item) => item.individual_survey_responses || []).find((item) => item.id === id);
+        const now = new Date().toISOString();
+        if (action === "configure") {
+          const state = states.configured;
+          await supabaseFetch(`/rest/v1/individual_survey_processes?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:state.status, owner_role:state.owner, next_action:state.nextAction, updated_by:currentUser.id, updated_at:now }) });
+          await writeAudit("process.survey.configured", "individual_survey_process", id, survey.status, state.status, { owner:state.owner, nextAction:state.nextAction, eligibleEmployeeCount:survey.eligible_employee_count });
+        }
+        if (action === "start") {
+          if (!survey.eligible_employee_count) throw new Error("Processes cannot start when org filters produce zero eligible employees.");
+          const state = states.active;
+          await supabaseFetch(`/rest/v1/individual_survey_processes?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:state.status, owner_role:state.owner, next_action:state.nextAction, started_at:now, updated_by:currentUser.id, updated_at:now }) });
+          await Promise.all((survey.target_employee_ids || []).map((employeeId) => supabaseFetch("/rest/v1/individual_survey_responses", { method:"POST", headers:{ Prefer:"resolution=merge-duplicates,return=minimal" }, body:JSON.stringify({ survey_process_id:id, employee_id:employeeId, status:"assigned", owner_role:"EMPLOYEE", next_action:"submit", created_by:currentUser.id, updated_by:currentUser.id }) })));
+          await writeAudit("process.survey.started", "individual_survey_process", id, survey.status, state.status, { owner:state.owner, nextAction:state.nextAction, responseCount:survey.target_employee_ids.length });
+        }
+        if (action === "submit") {
+          const state = states.submitted;
+          await supabaseFetch(`/rest/v1/individual_survey_responses?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:"submitted", owner_role:"HRBP", next_action:"approve", answers:{ engagement:4, clarity:5, comment:"Submitted from scaffold." }, submitted_at:now, updated_by:currentUser.id, updated_at:now }) });
+          await supabaseFetch(`/rest/v1/individual_survey_processes?id=eq.${response.survey_process_id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:state.status, owner_role:state.owner, next_action:state.nextAction, submitted_at:now, updated_by:currentUser.id, updated_at:now }) });
+          await writeAudit("process.survey.submitted", "individual_survey_response", id, response.status, "submitted", { owner:"HRBP", nextAction:"approve", answerKeys:["engagement","clarity","comment"] }, response.employee_id);
+        }
+        if (action === "approve" || action === "return") {
+          const next = action === "approve" ? { status:"approved", owner:"HRBP", nextAction:null, audit:"process.survey.approved" } : { status:"returned", owner:"EMPLOYEE", nextAction:"submit", audit:"process.survey.returned" };
+          const patch = { status:next.status, owner_role:next.owner, next_action:next.nextAction, updated_by:currentUser.id, updated_at:now };
+          if (action === "approve") patch.approved_at = now; else { patch.returned_at = now; patch.last_return_reason = "Needs a clearer survey answer."; }
+          await supabaseFetch(`/rest/v1/individual_survey_responses?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+          await supabaseFetch(`/rest/v1/individual_survey_processes?id=eq.${response.survey_process_id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:next.status, owner_role:next.owner, next_action:next.nextAction, updated_by:currentUser.id, updated_at:now }) });
+          await writeAudit(next.audit, "individual_survey_response", id, response.status, next.status, { owner:next.owner, nextAction:next.nextAction, reason:patch.last_return_reason || null }, response.employee_id);
+        }
+        if (action === "complete" || action === "cancel" || action === "visibility") {
+          const next = action === "complete" ? states.completed : action === "cancel" ? states.cancelled : states[survey.status];
+          const patch = { status:next.status, owner_role:next.owner, next_action:next.nextAction, updated_by:currentUser.id, updated_at:now };
+          if (action === "complete") patch.completed_at = now;
+          if (action === "cancel") patch.cancelled_at = now;
+          if (action === "visibility") { patch.visibility = { employeeCanView:true, managerCanView:true, hrbpCanView:true, hrAdminCanView:true }; patch.visibility_changed_at = now; }
+          await supabaseFetch(`/rest/v1/individual_survey_processes?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+          const auditAction = action === "visibility" ? "process.survey.visibility_changed" : action === "cancel" ? "process.survey.cancelled" : "process.survey.completed";
+          await writeAudit(auditAction, "individual_survey_process", id, survey.status, next.status, { owner:next.owner, nextAction:next.nextAction, visibility:patch.visibility || survey.visibility });
+        }
+        showMessage("Survey action saved and audit event written.", "success");
+        await loadSurveys();
+      }
+      document.querySelector("#templateId").addEventListener("change", syncVersions);
+      document.querySelector("#surveyForm").addEventListener("submit", (event) => createSurvey(event).catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#reloadButton").addEventListener("click", () => Promise.all([loadLookups(), loadSurveys()]).catch((error) => showMessage(error.message, "error")));
+      rows.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (button) actionSurvey(button.dataset.action, button.dataset.id).catch((error) => showMessage(error.message, "error"));
+      });
+      (async function init() { try { await ensureToken(); await loadLookups(); await loadSurveys(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load surveys"; } })();
+    </script>
+  </body>
+</html>

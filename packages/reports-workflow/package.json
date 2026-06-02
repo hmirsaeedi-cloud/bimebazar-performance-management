@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/reports-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/reportsWorkflow.d.ts",
+      "default": "./src/reportsWorkflow.mjs"
+    }
+  }
+}

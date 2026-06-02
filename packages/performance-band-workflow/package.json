@@ -1,0 +1,10 @@
+{
+  "name": "@bimebazar/performance-band-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/performanceBandWorkflow.mjs",
+  "types": "src/performanceBandWorkflow.d.ts",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

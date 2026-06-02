@@ -86,3 +86,64 @@ export const downwardEvaluationVisibilitySchema = z.object({
     managerCanViewReviewerNotes: z.boolean().default(false),
   }),
 });
+
+export const formInstancePayloadSchema = z.object({
+  responsePayload: z.record(z.unknown()).default({}),
+});
+
+export const formInstanceReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const formInstanceVisibilitySchema = z.object({
+  visibility: z.object({
+    employeeCanView: z.boolean().default(true),
+    managerCanView: z.boolean().default(true),
+    hrbpCanView: z.boolean().default(true),
+  }),
+});
+
+export const formInstanceAdminMoveSchema = z.object({
+  targetStatus: z.enum(["assigned", "in_progress", "submitted", "approved", "returned", "closed"]),
+  reason: z.string().min(12).max(700),
+});
+
+export const listIndividualSurveysQuerySchema = z.object({
+  status: z.enum(["draft", "configured", "active", "submitted", "approved", "returned", "completed", "cancelled"]).optional(),
+});
+
+export const createIndividualSurveySchema = z.object({
+  title: z.string().min(2).max(180),
+  description: z.string().max(800).optional(),
+  formTemplateId: z.string().uuid().optional().nullable(),
+  formTemplateVersionId: z.string().uuid(),
+  targetEmployeeIds: z.array(z.string().uuid()).min(1),
+  surveySettings: z.record(z.unknown()).default({}),
+  visibility: z.object({
+    employeeCanView: z.boolean().default(true),
+    managerCanView: z.boolean().default(false),
+    hrbpCanView: z.boolean().default(true),
+    hrAdminCanView: z.boolean().default(true),
+  }).default({}),
+});
+
+export const updateIndividualSurveySchema = createIndividualSurveySchema.partial().extend({
+  targetEmployeeIds: z.array(z.string().uuid()).min(1).optional(),
+});
+
+export const individualSurveyResponseSchema = z.object({
+  answers: z.record(z.unknown()).default({}),
+});
+
+export const individualSurveyReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const individualSurveyVisibilitySchema = z.object({
+  visibility: z.object({
+    employeeCanView: z.boolean().default(true),
+    managerCanView: z.boolean().default(false),
+    hrbpCanView: z.boolean().default(true),
+    hrAdminCanView: z.boolean().default(true),
+  }),
+});

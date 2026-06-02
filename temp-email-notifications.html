@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Email Notifications</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; --green:#2e7d4f; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form,.filters { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:92px; resize:vertical; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.returned,.pill.failed { background:#fff1d6; color:#7a4f00; }
+      .pill.cancelled { background:#eef0f1; color:#51616a; }
+      .visibility { display:inline-flex; margin-top:6px; border-radius:999px; padding:4px 8px; background:#fff0ee; color:var(--danger); font-size:.76rem; font-weight:800; }
+      .visibility.on { background:#edf8f0; color:var(--green); }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form,.filters { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Email Notifications</h1>
+          <p>Create, approve, queue, and track email notifications with explicit workflow states and audit history.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Email Draft</h2>
+        <form id="createForm">
+          <label>Recipient<select id="recipientUserId" required></select></label>
+          <label>To Email<input id="toEmail" type="email" required /></label>
+          <label>Priority<select id="priority"><option>normal</option><option>low</option><option>high</option><option>critical</option></select></label>
+          <label>Template Key<input id="templateKey" value="performance_task_assigned" /></label>
+          <label>Entity Type<input id="entityType" value="evaluation" /></label>
+          <label>Entity ID<input id="entityId" placeholder="optional linked record" /></label>
+          <label class="full">Subject<input id="subject" required value="Performance task assigned" /></label>
+          <label class="full">Text Body<textarea id="bodyText" required>Please review your assigned performance task.</textarea></label>
+          <label class="full">HTML Body<textarea id="bodyHtml" required>&lt;p&gt;Please review your assigned performance task.&lt;/p&gt;</textarea></label>
+          <label class="full">Action URL<input id="actionUrl" value="/temp-end-cycle-evaluation.html" /></label>
+          <button type="submit">Create draft</button>
+          <button class="secondary" id="reloadButton" type="button">Reload queue</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div><h2>Email Queue</h2><p id="countLabel">Loading...</p></div>
+          <div class="filters">
+            <label>Status<select id="statusFilter"><option value="">All</option><option>draft</option><option>pending_approval</option><option>approved</option><option>queued</option><option>sent</option><option>failed</option><option>returned</option><option>cancelled</option></select></label>
+            <label>Priority<select id="priorityFilter"><option value="">All</option><option>low</option><option>normal</option><option>high</option><option>critical</option></select></label>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Email</th><th>State</th><th>Recipient Visibility</th><th>Linked Record</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        draft:{ status:"draft", owner:"HR_ADMIN", nextAction:"submit", recipientVisible:false },
+        pending_approval:{ status:"pending_approval", owner:"HRBP", nextAction:"approve", recipientVisible:false },
+        approved:{ status:"approved", owner:"SYSTEM", nextAction:"queue", recipientVisible:false },
+        queued:{ status:"queued", owner:"SYSTEM", nextAction:"mark_sent", recipientVisible:false },
+        sent:{ status:"sent", owner:"RECIPIENT", nextAction:null, recipientVisible:true },
+        failed:{ status:"failed", owner:"HR_ADMIN", nextAction:"update", recipientVisible:false },
+        returned:{ status:"returned", owner:"HR_ADMIN", nextAction:"update", recipientVisible:false },
+        cancelled:{ status:"cancelled", owner:"SYSTEM", nextAction:null, recipientVisible:false },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.recipient_user_id, action, entity_type:"email_notification", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason:metadata.reason || null, metadata:{ toEmail:item.to_email, owner:metadata.owner, nextAction:metadata.nextAction, recipientVisible:item.recipient_visible, ...metadata } }) });
+      }
+      async function loadRecipients() {
+        const profiles = await supabaseFetch("/rest/v1/profiles?select=id,display_name,email,role_code,account_status&account_status=eq.active&order=display_name.asc&limit=200");
+        document.querySelector("#recipientUserId").innerHTML = profiles.map((profile) => `<option value="${profile.id}" data-email="${profile.email}">${profile.display_name} · ${profile.role_code}</option>`).join("");
+        syncEmail();
+      }
+      function syncEmail() {
+        const selected = document.querySelector("#recipientUserId").selectedOptions[0];
+        document.querySelector("#toEmail").value = selected?.dataset.email || "";
+      }
+      function filters() {
+        const params = new URLSearchParams();
+        params.set("select", "*");
+        params.set("order", "created_at.desc");
+        const status = document.querySelector("#statusFilter").value;
+        const priority = document.querySelector("#priorityFilter").value;
+        if (status) params.set("status", `eq.${status}`);
+        if (priority) params.set("priority", `eq.${priority}`);
+        return params.toString();
+      }
+      async function loadEmails() {
+        const emails = await supabaseFetch(`/rest/v1/email_notifications?${filters()}`);
+        countLabel.textContent = `${emails.length} email${emails.length === 1 ? "" : "s"}`;
+        rows.innerHTML = emails.map((item) => `<tr>
+          <td><strong>${item.subject}</strong><p>${item.body_text}</p><div class="muted">To: ${item.to_email} · <span class="pill ${item.priority}">${item.priority}</span></div></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+          <td><span class="visibility ${item.recipient_visible ? "on" : ""}">${item.recipient_visible ? "Visible" : "Hidden"}</span><div class="muted">Sent: ${item.sent_at || "-"}</div></td>
+          <td>${item.entity_type || ""}<div class="muted"><code>${item.entity_id || ""}</code></div>${item.action_url ? `<div class="muted">${item.action_url}</div>` : ""}</td>
+          <td class="actions">
+            ${["draft","returned"].includes(item.status) ? `<button data-action="submit" data-id="${item.id}">Submit</button>` : ""}
+            ${item.status === "pending_approval" ? `<button data-action="approve" data-id="${item.id}">Approve</button><button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+            ${item.status === "approved" ? `<button data-action="queue" data-id="${item.id}">Queue</button>` : ""}
+            ${item.status === "queued" ? `<button data-action="mark_sent" data-id="${item.id}">Mark sent</button><button class="warning" data-action="fail" data-id="${item.id}">Fail</button>` : ""}
+            ${!["sent","cancelled"].includes(item.status) ? `<button class="secondary" data-action="update" data-id="${item.id}">Update</button><button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button><button class="secondary" data-action="cancel" data-id="${item.id}">Cancel</button>` : `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button>`}
+          </td>
+        </tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function createEmail(event) {
+        event.preventDefault();
+        const state = stateByStatus.draft;
+        const item = {
+          id:crypto.randomUUID(),
+          recipient_user_id:document.querySelector("#recipientUserId").value,
+          actor_user_id:currentUser.id,
+          to_email:document.querySelector("#toEmail").value.trim().toLowerCase(),
+          status:state.status,
+          owner_role:state.owner,
+          next_action:state.nextAction,
+          recipient_visible:state.recipientVisible,
+          priority:document.querySelector("#priority").value,
+          template_key:document.querySelector("#templateKey").value.trim() || null,
+          subject:document.querySelector("#subject").value.trim(),
+          body_text:document.querySelector("#bodyText").value.trim(),
+          body_html:document.querySelector("#bodyHtml").value.trim(),
+          entity_type:document.querySelector("#entityType").value.trim() || null,
+          entity_id:document.querySelector("#entityId").value.trim() || null,
+          action_url:document.querySelector("#actionUrl").value.trim() || null,
+          metadata:{ owner:state.owner, nextAction:state.nextAction, source:"temp-email-notifications" },
+          created_by:currentUser.id,
+          updated_by:currentUser.id,
+        };
+        await supabaseFetch("/rest/v1/email_notifications", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(item) });
+        await writeAudit("notification.email.created", item, null, state.status, { owner:state.owner, nextAction:state.nextAction });
+        showMessage("Email draft created and audit event written.", "success");
+        await loadEmails();
+      }
+      async function handleAction(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/email_notifications?id=eq.${id}&select=*`);
+        if (!current) throw new Error("Email notification not found");
+        const stateMap = { submit:"pending_approval", approve:"approved", queue:"queued", mark_sent:"sent", fail:"failed", return:"returned", cancel:"cancelled", update:"draft", visibility:current.status };
+        const state = stateByStatus[stateMap[action]];
+        const patch = { status:state.status, owner_role:state.owner, next_action:state.nextAction, recipient_visible:state.recipientVisible, metadata:{ ...(current.metadata || {}), owner:state.owner, nextAction:state.nextAction }, updated_by:currentUser.id, updated_at:new Date().toISOString() };
+        if (action === "submit") patch.submitted_at = new Date().toISOString();
+        if (action === "approve") patch.approved_at = new Date().toISOString();
+        if (action === "queue") patch.queued_at = new Date().toISOString();
+        if (action === "mark_sent") { patch.sent_at = new Date().toISOString(); patch.provider = "manual"; patch.provider_message_id = crypto.randomUUID(); }
+        if (action === "fail") { patch.failed_at = new Date().toISOString(); patch.last_error = "Manual failure from temporary scaffold"; }
+        if (action === "return") { patch.returned_at = new Date().toISOString(); patch.last_return_reason = "Returned from temporary scaffold"; }
+        if (action === "cancel") patch.cancelled_at = new Date().toISOString();
+        if (action === "update") {
+          const subject = prompt("Update email subject", current.subject);
+          if (!subject) return;
+          patch.subject = subject;
+        }
+        if (action === "visibility") {
+          patch.status = current.status;
+          patch.owner_role = current.owner_role;
+          patch.next_action = current.next_action;
+          patch.recipient_visible = !current.recipient_visible;
+          patch.visibility_changed_at = new Date().toISOString();
+        }
+        await supabaseFetch(`/rest/v1/email_notifications?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        const auditAction = action === "mark_sent" ? "notification.email.sent" : action === "visibility" ? "notification.email.visibility_changed" : `notification.email.${action === "return" ? "returned" : action === "cancel" ? "cancelled" : action === "fail" ? "failed" : action === "queue" ? "queued" : action === "approve" ? "approved" : action === "update" ? "updated" : "submitted"}`;
+        await writeAudit(auditAction, { ...current, recipient_visible:patch.recipient_visible }, current.status, patch.status, { owner:patch.owner_role, nextAction:patch.next_action, reason:patch.last_return_reason || patch.last_error || null });
+        showMessage("Email state saved and audit event written.", "success");
+        await loadEmails();
+      }
+      document.querySelector("#createForm").addEventListener("submit", createEmail);
+      document.querySelector("#recipientUserId").addEventListener("change", syncEmail);
+      document.querySelector("#reloadButton").addEventListener("click", () => loadEmails().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#statusFilter").addEventListener("change", () => loadEmails().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#priorityFilter").addEventListener("change", () => loadEmails().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadRecipients(); await loadEmails(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load email queue"; } })();
+    </script>
+  </body>
+</html>

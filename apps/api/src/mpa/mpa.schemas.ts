@@ -70,3 +70,19 @@ export const autoAttachMpaSchema = z.object({
   evaluationType: z.enum(["downward_evaluation", "self_assessment"]),
   evaluationId: z.string().uuid(),
 });
+
+export const listMpaHistoryQuerySchema = z.object({
+  status: z.enum(["captured", "reviewed", "restored", "returned", "archived"]).optional(),
+});
+
+export const createMpaHistoryVersionSchema = z.object({
+  comparisonSummary: z.record(z.unknown()).default({}),
+});
+
+export const mpaHistoryDecisionSchema = z.object({
+  reason: z.string().min(8).max(500).optional(),
+});
+
+export const mpaHistoryVisibilitySchema = z.object({
+  visibleToEmployee: z.boolean(),
+});

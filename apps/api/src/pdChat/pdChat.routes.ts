@@ -3,6 +3,7 @@ import { requirePermission } from "../middleware/rbac.js";
 import {
   createPdChatSchema,
   listPdChatsQuerySchema,
+  pdChatAttachmentSchema,
   pdChatMessageSchema,
   pdChatReturnSchema,
   pdChatVisibilitySchema,
@@ -10,6 +11,7 @@ import {
 import {
   approvePdChat,
   archivePdChat,
+  autoAttachPdChatToEvaluation,
   createPdChat,
   getPdChat,
   listPdChats,
@@ -34,6 +36,15 @@ pdChatRouter.post("/", requirePermission("pd_chat.create"), async (req, res, nex
   try {
     const input = createPdChatSchema.parse(req.body);
     res.status(201).json({ chat: await createPdChat({ actor: req.user!, ...input }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+pdChatRouter.post("/attachments/auto", requirePermission("pd_chat.attach"), async (req, res, next) => {
+  try {
+    const input = pdChatAttachmentSchema.parse(req.body);
+    res.status(201).json({ attachment: await autoAttachPdChatToEvaluation({ actor: req.user!, ...input }) });
   } catch (error) {
     next(error);
   }

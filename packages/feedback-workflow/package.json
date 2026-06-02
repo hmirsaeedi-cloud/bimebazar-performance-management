@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/feedback-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/feedbackWorkflow.d.ts",
+      "default": "./src/feedbackWorkflow.mjs"
+    }
+  }
+}

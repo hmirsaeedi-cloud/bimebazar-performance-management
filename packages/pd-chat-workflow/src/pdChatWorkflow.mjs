@@ -18,6 +18,57 @@ export const pdChatActions = Object.freeze({
   ARCHIVE: "archive",
 });
 
+export const pdChatAttachmentStatuses = Object.freeze({
+  MATCHED: "matched",
+  ATTACHED: "attached",
+  MISSING_CHAT: "missing_chat",
+  DETACHED: "detached",
+});
+
+export const pdChatAttachmentActions = Object.freeze({
+  AUTO_ATTACH: "auto_attach",
+  MARK_MISSING: "mark_missing",
+  DETACH: "detach",
+  OVERRIDE_ATTACH: "override_attach",
+});
+
+export const pdChatAttachmentWorkflow = Object.freeze({
+  [pdChatAttachmentStatuses.MATCHED]: {
+    status: pdChatAttachmentStatuses.MATCHED,
+    owner: "SYSTEM",
+    nextAction: pdChatAttachmentActions.AUTO_ATTACH,
+    transitions: {
+      [pdChatAttachmentActions.AUTO_ATTACH]: pdChatAttachmentStatuses.ATTACHED,
+      [pdChatAttachmentActions.MARK_MISSING]: pdChatAttachmentStatuses.MISSING_CHAT,
+    },
+  },
+  [pdChatAttachmentStatuses.ATTACHED]: {
+    status: pdChatAttachmentStatuses.ATTACHED,
+    owner: "SYSTEM",
+    nextAction: null,
+    transitions: {
+      [pdChatAttachmentActions.DETACH]: pdChatAttachmentStatuses.DETACHED,
+      [pdChatAttachmentActions.OVERRIDE_ATTACH]: pdChatAttachmentStatuses.ATTACHED,
+    },
+  },
+  [pdChatAttachmentStatuses.MISSING_CHAT]: {
+    status: pdChatAttachmentStatuses.MISSING_CHAT,
+    owner: "MANAGER",
+    nextAction: pdChatAttachmentActions.OVERRIDE_ATTACH,
+    transitions: {
+      [pdChatAttachmentActions.OVERRIDE_ATTACH]: pdChatAttachmentStatuses.ATTACHED,
+    },
+  },
+  [pdChatAttachmentStatuses.DETACHED]: {
+    status: pdChatAttachmentStatuses.DETACHED,
+    owner: "MANAGER",
+    nextAction: pdChatAttachmentActions.OVERRIDE_ATTACH,
+    transitions: {
+      [pdChatAttachmentActions.OVERRIDE_ATTACH]: pdChatAttachmentStatuses.ATTACHED,
+    },
+  },
+});
+
 export const pdChatWorkflow = Object.freeze({
   [pdChatStatuses.DRAFT]: {
     status: pdChatStatuses.DRAFT,
@@ -93,6 +144,20 @@ export function transitionPdChatState(status, action) {
   const nextStatus = state.transitions[action];
   if (!nextStatus) throw new Error(`Action ${action} is not allowed from ${status}`);
   return getPdChatState(nextStatus);
+}
+
+export function getPdChatAttachmentState(status) {
+  const state = pdChatAttachmentWorkflow[status];
+  if (!state) throw new Error(`Unknown PD Chat attachment status: ${status}`);
+  return { status: state.status, owner: state.owner, nextAction: state.nextAction };
+}
+
+export function transitionPdChatAttachmentState(status, action) {
+  const state = pdChatAttachmentWorkflow[status];
+  if (!state) throw new Error(`Unknown PD Chat attachment status: ${status}`);
+  const nextStatus = state.transitions[action];
+  if (!nextStatus) throw new Error(`Action ${action} is not allowed from ${status}`);
+  return getPdChatAttachmentState(nextStatus);
 }
 
 export function normalizeChatMessage(input) {

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar HRBP Reports</title>
+    <style>
+      :root {
+        --bg: #f5f7f8;
+        --panel: #ffffff;
+        --ink: #172026;
+        --muted: #60707a;
+        --line: #d8e1e5;
+        --teal: #087c7c;
+        --green: #2f7d4f;
+        --gold: #b67c19;
+        --danger: #b33b35;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { max-width: 1240px; margin: 0 auto; padding: 28px 18px 48px; }
+      header, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; }
+      p { margin: 0; color: var(--muted); }
+      section { margin-top: 18px; border: 1px solid var(--line); border-radius: 8px; padding: 18px; background: var(--panel); box-shadow: 0 12px 34px rgba(22, 40, 48, 0.08); }
+      .grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 12px; }
+      .kpis { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
+      .kpi { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: #fbfcfc; }
+      .kpi strong { display: block; font-size: 1.55rem; }
+      label { display: grid; gap: 6px; color: var(--muted); font-size: 0.82rem; font-weight: 750; }
+      input, select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px; color: var(--ink); font: inherit; }
+      button { min-height: 40px; border: 0; border-radius: 8px; background: var(--teal); color: #fff; cursor: pointer; font: inherit; font-weight: 800; padding: 0 12px; }
+      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+      button.warning { background: var(--gold); }
+      button.danger { background: var(--danger); }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 0.78rem; }
+      .pill { display: inline-flex; border-radius: 999px; padding: 4px 8px; background: #e8f4f2; color: #075b5b; font-size: 0.76rem; font-weight: 800; }
+      .muted { margin-top: 4px; color: var(--muted); font-size: 0.76rem; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .insights { display: grid; gap: 8px; min-width: 240px; }
+      .insights span { display: block; border-left: 3px solid var(--green); padding-left: 8px; color: var(--muted); }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      @media (max-width: 900px) {
+        header, .toolbar { align-items: stretch; flex-direction: column; }
+        .grid, .kpis { grid-template-columns: 1fr; }
+        table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>HRBP Reports & Analytics</h1>
+          <p>Aggregated evaluation, feedback, PD Chat, PIP, and promotion analytics with explicit report workflow state.</p>
+        </div>
+        <nav>
+          <a href="/temp-dashboard.html">Dashboard</a>
+          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Create Report Snapshot</h2>
+        <form id="createForm" class="grid">
+          <label>Title<input id="title" value="HRBP quarterly analytics snapshot" required /></label>
+          <label>Period start<input id="periodStart" type="date" /></label>
+          <label>Period end<input id="periodEnd" type="date" /></label>
+          <label>Scope<select id="scope"><option value="all_active_employees">All active employees</option><option value="evaluation_only">Evaluation only</option><option value="career_flags">Career flags</option></select></label>
+          <button type="submit">Create draft</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        </form>
+        <div class="kpis" id="kpis"></div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Report Snapshots</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Report</th>
+              <th>Status</th>
+              <th>Owner / Next</th>
+              <th>Metrics</th>
+              <th>Insights</th>
+              <th>Move</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let reports = [];
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const message = document.querySelector("#message");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function stateFor(status, action) {
+        const table = {
+          draft: { generate: ["generated", "HRBP", "submit"] },
+          generated: { generate: ["generated", "HRBP", "submit"], submit: ["submitted", "HR_ADMIN", "approve"], export: ["exported", "HRBP_HR_ADMIN", "archive"] },
+          submitted: { approve: ["reviewed", "HR_ADMIN", "override_visibility"], return: ["returned", "HRBP", "generate"] },
+          reviewed: { visibility: ["visibility_approved", "HRBP_HR_ADMIN", "export"], export: ["exported", "HRBP_HR_ADMIN", "archive"], return: ["returned", "HRBP", "generate"] },
+          returned: { generate: ["generated", "HRBP", "submit"], submit: ["submitted", "HR_ADMIN", "approve"] },
+          visibility_approved: { export: ["exported", "HRBP_HR_ADMIN", "archive"], archive: ["archived", "SYSTEM", null] },
+          exported: { archive: ["archived", "SYSTEM", null], visibility: ["visibility_approved", "HRBP_HR_ADMIN", "export"] },
+        };
+        return table[status]?.[action];
+      }
+
+      async function writeAudit(action, report, fromStatus, toStatus, metadata, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: currentUser.id,
+            action,
+            entity_type: "hrbp_report_snapshot",
+            entity_id: report.id,
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata,
+          }),
+        });
+      }
+
+      function summarizeReportMetrics(input) {
+        const totalEvaluations = Number(input.totalEvaluations || 0);
+        const denominator = totalEvaluations > 0 ? totalEvaluations : 1;
+        return {
+          ...input,
+          completionRate: Number(((Number(input.completedEvaluations || 0) / denominator) * 100).toFixed(2)),
+          riskRate: Number(((Number(input.pipFlags || 0) / denominator) * 100).toFixed(2)),
+          promotionRate: Number(((Number(input.promotionFlags || 0) / denominator) * 100).toFixed(2)),
+        };
+      }
+
+      async function calculateMetrics() {
+        const [profiles, endCycle, midCycle, flags, feedback, chats, promotions, pips] = await Promise.all([
+          supabaseFetch("/rest/v1/profiles?select=id,account_status,role_code"),
+          supabaseFetch("/rest/v1/end_cycle_evaluations?select=id,status,score,created_at"),
+          supabaseFetch("/rest/v1/mid_cycle_evaluations?select=id,status,score,created_at"),
+          supabaseFetch("/rest/v1/performance_band_flags?select=id,flag_type,status,weighted_score,created_at"),
+          supabaseFetch("/rest/v1/feedback_requests?select=id,status,is_anonymous,response_count,created_at"),
+          supabaseFetch("/rest/v1/pd_chat_logs?select=id,status,created_at"),
+          supabaseFetch("/rest/v1/promotion_cases?select=id,status,created_at"),
+          supabaseFetch("/rest/v1/pip_cases?select=id,status,created_at"),
+        ]);
+        const evaluations = [...endCycle, ...midCycle];
+        const visibleScores = evaluations.map((item) => item.score).filter((score) => score?.visible && typeof score.totalScore === "number").map((score) => Number(score.totalScore));
+        const metrics = summarizeReportMetrics({
+          activeEmployees: profiles.filter((item) => item.account_status === "active").length,
+          totalEvaluations: evaluations.length,
+          completedEvaluations: evaluations.filter((item) => item.status === "completed").length,
+          submittedEvaluations: evaluations.filter((item) => ["submitted", "manager_approved", "hrbp_approved", "reviewed"].includes(item.status)).length,
+          pipFlags: flags.filter((item) => item.flag_type === "pip").length,
+          promotionFlags: flags.filter((item) => item.flag_type === "promotion").length,
+          feedbackRequests: feedback.length,
+          pdChatLogs: chats.length,
+          promotionCases: promotions.length,
+          pipCases: pips.length,
+          averageScore: visibleScores.length ? Number((visibleScores.reduce((sum, score) => sum + score, 0) / visibleScores.length).toFixed(2)) : null,
+          generatedAt: new Date().toISOString(),
+        });
+        return metrics;
+      }
+
+      function insightsFor(metrics) {
+        const insights = [
+          `Evaluation completion is ${metrics.completionRate || 0}%.`,
+          `PIP flag rate is ${metrics.riskRate || 0}% and promotion flag rate is ${metrics.promotionRate || 0}%.`,
+        ];
+        if (typeof metrics.averageScore === "number") insights.push(`Average visible score is ${metrics.averageScore}.`);
+        return insights;
+      }
+
+      async function loadReports() {
+        reports = await supabaseFetch("/rest/v1/hrbp_report_snapshots?select=*&order=updated_at.desc");
+        countLabel.textContent = `${reports.length} report snapshot${reports.length === 1 ? "" : "s"}`;
+        renderKpis(reports[0]?.metrics || {});
+        rows.innerHTML = reports.map((report) => `
+          <tr>
+            <td>
+              <strong>${report.title}</strong>
+              <div class="muted">${report.period_start || "No start"} to ${report.period_end || "No end"}</div>
+              ${report.last_return_reason ? `<div class="muted">Returned: ${report.last_return_reason}</div>` : ""}
+            </td>
+            <td><span class="pill">${report.status}</span></td>
+            <td>
+              <div>${report.owner_role}</div>
+              <div class="muted">${report.next_action || "No next action"}</div>
+            </td>
+            <td>${renderMetrics(report.metrics || {})}</td>
+            <td class="insights">${(report.insights || []).map((item) => `<span>${item}</span>`).join("")}</td>
+            <td class="actions">${renderActions(report)}</td>
+          </tr>
+        `).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => {
+          button.addEventListener("click", () => moveReport(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error")));
+        });
+      }
+
+      function renderKpis(metrics) {
+        document.querySelector("#kpis").innerHTML = [
+          ["Active employees", metrics.activeEmployees ?? 0],
+          ["Evaluations", metrics.totalEvaluations ?? 0],
+          ["Completion", `${metrics.completionRate ?? 0}%`],
+          ["Avg score", metrics.averageScore ?? "Hidden"],
+        ].map(([label, value]) => `<div class="kpi"><strong>${value}</strong><span class="muted">${label}</span></div>`).join("");
+      }
+
+      function renderMetrics(metrics) {
+        return `
+          <div><strong>${metrics.completionRate ?? 0}%</strong> completion</div>
+          <div class="muted">${metrics.pipFlags ?? 0} PIP flags / ${metrics.promotionFlags ?? 0} promo flags</div>
+          <div class="muted">${metrics.feedbackRequests ?? 0} feedback / ${metrics.pdChatLogs ?? 0} PD chats</div>
+        `;
+      }
+
+      function renderActions(report) {
+        const actions = {
+          draft: [["generate", "Generate"]],
+          generated: [["generate", "Regenerate"], ["submit", "Submit"], ["export", "Export"]],
+          submitted: [["approve", "Approve"], ["return", "Return"]],
+          reviewed: [["visibility", "Approve visibility"], ["export", "Export"], ["return", "Return"]],
+          returned: [["generate", "Regenerate"], ["submit", "Submit"]],
+          visibility_approved: [["export", "Export"], ["archive", "Archive"]],
+          exported: [["archive", "Archive"], ["visibility", "Visibility"]],
+        }[report.status] || [];
+        return actions.map(([action, label]) => `<button data-id="${report.id}" data-action="${action}" class="${action === "return" ? "warning" : action === "archive" ? "danger" : ""}">${label}</button>`).join("");
+      }
+
+      async function moveReport(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/hrbp_report_snapshots?id=eq.${id}&select=*`);
+        const next = stateFor(current.status, action);
+        if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
+        const now = new Date().toISOString();
+        const patch = { status: next[0], owner_role: next[1], next_action: next[2], updated_by: currentUser.id, updated_at: now };
+        const metadata = { owner: next[1], nextAction: next[2], reportKey: current.report_key };
+        let auditAction = `reports.${action}`;
+        let reason = null;
+        if (action === "generate") {
+          const metrics = await calculateMetrics();
+          patch.metrics = metrics;
+          patch.insights = insightsFor(metrics);
+          patch.filters = { ...(current.filters || {}), scope: document.querySelector("#scope").value };
+          auditAction = "reports.generated";
+          metadata.metricKeys = Object.keys(metrics);
+        }
+        if (action === "submit") {
+          patch.submitted_at = now;
+          auditAction = "reports.submitted";
+        }
+        if (action === "approve") {
+          patch.reviewed_at = now;
+          auditAction = "reports.approved";
+        }
+        if (action === "return") {
+          reason = prompt("Why is this report returned?", "Needs one more analytics check before review.");
+          patch.returned_at = now;
+          patch.last_return_reason = reason;
+          auditAction = "reports.returned";
+        }
+        if (action === "visibility") {
+          patch.visibility_changed_at = now;
+          patch.insights = current.insights?.length ? current.insights : insightsFor(current.metrics || {});
+          auditAction = "reports.visibility_changed";
+        }
+        if (action === "export") {
+          patch.export_format = "csv";
+          patch.exported_at = now;
+          auditAction = "reports.exported";
+        }
+        if (action === "archive") {
+          patch.archived_at = now;
+          auditAction = "reports.archived";
+        }
+        await supabaseFetch(`/rest/v1/hrbp_report_snapshots?id=eq.${id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(patch),
+        });
+        await writeAudit(auditAction, current, current.status, next[0], metadata, reason);
+        showMessage(`Report moved to ${next[0]}.`, "success");
+        await loadReports();
+      }
+
+      document.querySelector("#createForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const id = crypto.randomUUID();
+          const state = { status: "draft", owner: "HRBP", nextAction: "generate" };
+          const report = {
+            id,
+            report_key: "hrbp_analytics",
+            title: document.querySelector("#title").value.trim(),
+            period_start: document.querySelector("#periodStart").value || null,
+            period_end: document.querySelector("#periodEnd").value || null,
+            status: state.status,
+            owner_role: state.owner,
+            next_action: state.nextAction,
+            filters: { scope: document.querySelector("#scope").value },
+            metrics: {},
+            insights: [],
+            created_by: currentUser.id,
+            updated_by: currentUser.id,
+          };
+          await supabaseFetch("/rest/v1/hrbp_report_snapshots", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify(report),
+          });
+          await writeAudit("reports.created", report, null, state.status, { owner: state.owner, nextAction: state.nextAction });
+          showMessage("Report draft created.", "success");
+          await loadReports();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      document.querySelector("#refreshButton").addEventListener("click", () => loadReports().catch((error) => showMessage(error.message, "error")));
+
+      (async function init() {
+        try {
+          await ensureToken();
+          await loadReports();
+        } catch (error) {
+          showMessage(error.message, "error");
+          countLabel.textContent = "Could not load reports";
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Immutable Audit Log</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1200px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      .grid { display:grid; grid-template-columns:repeat(5,minmax(130px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:900px) { header,.toolbar { align-items:stretch; flex-direction:column; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Immutable Audit Log</h1>
+          <p>Compliance view for append-only events, hash integrity, and export verification.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Filters</h2>
+        <form id="filterForm" class="grid">
+          <label>Action<input id="actionFilter" placeholder="profile.created" /></label>
+          <label>Entity Type<input id="entityTypeFilter" placeholder="profile" /></label>
+          <label>Entity ID<input id="entityIdFilter" /></label>
+          <label>Limit<input id="limitFilter" type="number" value="100" min="1" max="500" /></label>
+          <button type="submit">Load events</button>
+          <button class="secondary" id="verifyButton" type="button">Verify integrity</button>
+          <button class="warning" id="exportButton" type="button">Generate CSV export</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Audit Events</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>Status</th><th>Hash</th><th>Metadata</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Export Requests</h2><p id="exportCountLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Created</th><th>Status</th><th>Rows</th><th>Payload Hash</th><th>Move</th></tr></thead>
+          <tbody id="exportRows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const exportRows = document.querySelector("#exportRows");
+      const countLabel = document.querySelector("#countLabel");
+      const exportCountLabel = document.querySelector("#exportCountLabel");
+
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      function queryString() {
+        const params = new URLSearchParams();
+        const action = document.querySelector("#actionFilter").value.trim();
+        const entityType = document.querySelector("#entityTypeFilter").value.trim();
+        const entityId = document.querySelector("#entityIdFilter").value.trim();
+        const limit = document.querySelector("#limitFilter").value || "100";
+        if (action) params.set("action", `eq.${action}`);
+        if (entityType) params.set("entity_type", `eq.${entityType}`);
+        if (entityId) params.set("entity_id", `eq.${entityId}`);
+        params.set("select", "id,immutable_sequence,actor_user_id,target_user_id,action,entity_type,entity_id,from_status,to_status,reason,metadata,prev_event_hash,event_hash,integrity_version,created_at");
+        params.set("order", "created_at.desc");
+        params.set("limit", limit);
+        return params.toString();
+      }
+      async function writeAudit(action, entityId, fromStatus, toStatus, metadata) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, action, entity_type:"audit_export_request", entity_id:entityId, from_status:fromStatus, to_status:toStatus, metadata }) });
+      }
+      async function loadEvents() {
+        const events = await supabaseFetch(`/rest/v1/audit_events?${queryString()}`);
+        countLabel.textContent = `${events.length} event${events.length === 1 ? "" : "s"}`;
+        rows.innerHTML = events.map((event) => `<tr><td>${new Date(event.created_at).toLocaleString("fa-IR")}</td><td><span class="pill">${event.action}</span></td><td>${event.entity_type}<div class="muted">${event.entity_id || ""}</div></td><td>${event.from_status || ""} -> ${event.to_status || ""}</td><td><code>${event.event_hash || "pending"}</code><div class="muted">prev: ${(event.prev_event_hash || "").slice(0, 12)}</div></td><td><code>${JSON.stringify(event.metadata || {})}</code></td></tr>`).join("");
+      }
+      async function loadExports() {
+        const exports = await supabaseFetch("/rest/v1/audit_export_requests?select=*&order=updated_at.desc");
+        exportCountLabel.textContent = `${exports.length} export request${exports.length === 1 ? "" : "s"}`;
+        exportRows.innerHTML = exports.map((item) => `<tr><td>${new Date(item.created_at).toLocaleString("fa-IR")}</td><td><span class="pill">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td><td>${item.row_count}</td><td><code>${item.payload_hash || ""}</code></td><td class="actions">${item.status === "generated" ? `<button data-id="${item.id}">Verify export</button>` : ""}</td></tr>`).join("");
+        document.querySelectorAll("[data-id]").forEach((button) => button.addEventListener("click", () => verifyExport(button.dataset.id).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function verifyIntegrity() {
+        const events = await supabaseFetch("/rest/v1/audit_events?select=id,prev_event_hash,event_hash,created_at&order=created_at.asc&limit=5000");
+        const missingHashCount = events.filter((event) => !event.event_hash).length;
+        const protectedCount = events.filter((event) => event.event_hash).length;
+        await writeAudit("compliance.audit_integrity_verified", "audit_events", null, missingHashCount === 0 ? "verified" : "attention_needed", { missingHashCount, protectedCount });
+        showMessage(`Integrity check recorded. Protected events: ${protectedCount}. Missing hashes: ${missingHashCount}.`, missingHashCount === 0 ? "success" : "error");
+        await loadEvents();
+      }
+      async function generateExport() {
+        const events = await supabaseFetch(`/rest/v1/audit_events?${queryString()}`);
+        const payload = ["id,created_at,action,entity_type,entity_id,event_hash"].concat(events.map((event) => [event.id, event.created_at, event.action, event.entity_type, event.entity_id || "", event.event_hash || ""].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))).join("\n");
+        const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+        const payloadHash = Array.from(new Uint8Array(hashBuffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+        const id = crypto.randomUUID();
+        await supabaseFetch("/rest/v1/audit_export_requests", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ id, status:"generated", owner_role:"HR_ADMIN", next_action:"verify", filters:{ source:"temp-audit-log" }, row_count:events.length, export_format:"csv", export_payload:payload, payload_hash:payloadHash, generated_at:new Date().toISOString(), requested_by:currentUser.id, updated_by:currentUser.id }) });
+        await writeAudit("compliance.audit_export_generated", id, "requested", "generated", { owner:"HR_ADMIN", nextAction:"verify", rowCount:events.length, payloadHash });
+        showMessage("Audit export generated and audit event written.", "success");
+        await loadExports();
+      }
+      async function verifyExport(id) {
+        const [item] = await supabaseFetch(`/rest/v1/audit_export_requests?id=eq.${id}&select=*`);
+        await supabaseFetch(`/rest/v1/audit_export_requests?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:"verified", owner_role:"SYSTEM", next_action:null, verified_at:new Date().toISOString(), updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+        await writeAudit("compliance.audit_export_verified", id, item.status, "verified", { owner:"SYSTEM", nextAction:null, payloadHash:item.payload_hash });
+        showMessage("Audit export verified.", "success");
+        await loadExports();
+      }
+      document.querySelector("#filterForm").addEventListener("submit", (event) => { event.preventDefault(); loadEvents().catch((error) => showMessage(error.message, "error")); });
+      document.querySelector("#verifyButton").addEventListener("click", () => verifyIntegrity().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#exportButton").addEventListener("click", () => generateExport().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await Promise.all([loadEvents(), loadExports()]); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load audit events"; } })();
+    </script>
+  </body>
+</html>

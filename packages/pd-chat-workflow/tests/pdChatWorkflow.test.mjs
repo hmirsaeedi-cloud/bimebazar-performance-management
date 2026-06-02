@@ -2,9 +2,13 @@ import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   appendChatMessage,
+  getPdChatAttachmentState,
   getPdChatState,
+  pdChatAttachmentActions,
+  pdChatAttachmentStatuses,
   pdChatActions,
   pdChatStatuses,
+  transitionPdChatAttachmentState,
   transitionPdChatState,
 } from "../src/pdChatWorkflow.mjs";
 
@@ -47,5 +51,28 @@ describe("pdChatWorkflow", () => {
     });
     assert.equal(messages[0].body, "Growth goal discussed.");
     assert.equal(messages[0].visibility, "employee_manager");
+  });
+
+  test("represents PD Chat attachment states with status owner and nextAction", () => {
+    for (const status of Object.values(pdChatAttachmentStatuses)) {
+      const state = getPdChatAttachmentState(status);
+      assert.equal(state.status, status);
+      assert.ok(state.owner);
+      assert.ok("nextAction" in state);
+    }
+  });
+
+  test("auto-attaches a matched PD Chat to an evaluation", () => {
+    const state = transitionPdChatAttachmentState(pdChatAttachmentStatuses.MATCHED, pdChatAttachmentActions.AUTO_ATTACH);
+    assert.equal(state.status, pdChatAttachmentStatuses.ATTACHED);
+    assert.equal(state.owner, "SYSTEM");
+    assert.equal(state.nextAction, null);
+  });
+
+  test("routes missing PD Chat attachments to manager override", () => {
+    const state = transitionPdChatAttachmentState(pdChatAttachmentStatuses.MATCHED, pdChatAttachmentActions.MARK_MISSING);
+    assert.equal(state.status, pdChatAttachmentStatuses.MISSING_CHAT);
+    assert.equal(state.owner, "MANAGER");
+    assert.equal(state.nextAction, pdChatAttachmentActions.OVERRIDE_ATTACH);
   });
 });

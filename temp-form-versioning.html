@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Form Versioning</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form { display:grid; grid-template-columns:repeat(3,minmax(180px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:128px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.82rem; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.returned { background:#fff1d6; color:#7a4f00; }
+      .pill.archived { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Form Versioning On Edit</h1>
+          <p>Create draft edit versions from published forms, review them, and publish without changing older locked versions.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create/Edit Version</h2>
+        <form id="editForm">
+          <label class="full">Template<select id="templateId" required></select></label>
+          <label class="full">Schema JSON<textarea id="schemaJson" required></textarea></label>
+          <label class="full">Change Summary<input id="changeSummary" value="Edited form version for review." /></label>
+          <button type="submit">Create edit version</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Versions</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Version</th><th>State</th><th>Change</th><th>Visibility</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let templates = [];
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const schemaJson = document.querySelector("#schemaJson");
+      const stateByStatus = {
+        draft_edit:{ status:"draft_edit", owner:"HR_ADMIN", nextAction:"submit" },
+        submitted:{ status:"submitted", owner:"HRBP", nextAction:"approve" },
+        approved:{ status:"approved", owner:"HR_ADMIN", nextAction:"publish" },
+        published:{ status:"published", owner:"SYSTEM", nextAction:null },
+        returned:{ status:"returned", owner:"HR_ADMIN", nextAction:"update" },
+        archived:{ status:"archived", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, action, entity_type:"form_template_version", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason:metadata.reason || null, metadata:{ templateId:item.template_id, versionNumber:item.version_number, owner:metadata.owner, nextAction:metadata.nextAction, ...metadata } }) });
+      }
+      function countQuestions(schema) {
+        return (schema.sections || []).reduce((sum, section) => sum + (section.questions || []).length, 0);
+      }
+      async function loadTemplates() {
+        templates = await supabaseFetch("/rest/v1/form_templates?select=*,form_template_versions(*)&order=updated_at.desc");
+        document.querySelector("#templateId").innerHTML = templates.map((template) => `<option value="${template.id}">${template.name} · ${template.status}</option>`).join("");
+        syncSchema();
+      }
+      function currentTemplate() { return templates.find((template) => template.id === document.querySelector("#templateId").value); }
+      function currentVersion(template) { return (template?.form_template_versions || []).find((version) => version.id === template.current_version_id) || template?.form_template_versions?.[0]; }
+      function syncSchema() {
+        const version = currentVersion(currentTemplate());
+        schemaJson.value = JSON.stringify(version?.schema || { title:"Untitled form", sections:[{ id:"s1", title:"Section", questions:[{ id:"q1", type:"short_text", label:"Question", required:true }] }] }, null, 2);
+      }
+      async function loadVersions() {
+        const templateId = document.querySelector("#templateId").value;
+        if (!templateId) { rows.innerHTML = ""; countLabel.textContent = "No template selected"; return; }
+        const versions = await supabaseFetch(`/rest/v1/form_template_versions?template_id=eq.${templateId}&select=*&order=version_number.desc`);
+        countLabel.textContent = `${versions.length} version${versions.length === 1 ? "" : "s"}`;
+        rows.innerHTML = versions.map((item) => {
+          const state = item.version_status || (item.status === "published" ? "published" : item.status === "archived" ? "archived" : "draft_edit");
+          const visible = item.visibility_policy || {};
+          return `<tr>
+            <td><strong>v${item.version_number}</strong><div class="muted"><code>${item.id}</code></div><div class="muted">Parent: ${item.parent_version_id || "-"}</div></td>
+            <td><span class="pill ${state}">${state}</span><div class="muted">${item.version_owner_role || "-"} / ${item.version_next_action || "done"}</div></td>
+            <td>${item.change_summary?.summary || "-"}<div class="muted">${countQuestions(item.schema)} questions</div></td>
+            <td><code>${JSON.stringify(visible)}</code></td>
+            <td class="actions">
+              ${["draft_edit","returned"].includes(state) ? `<button data-action="submit" data-id="${item.id}">Submit</button><button class="secondary" data-action="update" data-id="${item.id}">Update</button>` : ""}
+              ${state === "submitted" ? `<button data-action="approve" data-id="${item.id}">Approve</button><button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+              ${state === "approved" ? `<button data-action="publish" data-id="${item.id}">Publish</button>` : ""}
+              ${state !== "archived" ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button><button class="secondary" data-action="archive" data-id="${item.id}">Archive</button>` : ""}
+            </td>
+          </tr>`;
+        }).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function createEdit(event) {
+        event.preventDefault();
+        const template = currentTemplate();
+        const current = currentVersion(template);
+        const existing = await supabaseFetch(`/rest/v1/form_template_versions?template_id=eq.${template.id}&select=version_number&order=version_number.desc&limit=1`);
+        const state = stateByStatus.draft_edit;
+        const schema = JSON.parse(schemaJson.value);
+        const item = {
+          id:crypto.randomUUID(),
+          template_id:template.id,
+          parent_version_id:current?.id || null,
+          version_number:Number(existing[0]?.version_number || 0) + 1,
+          status:"draft",
+          version_status:state.status,
+          version_owner_role:state.owner,
+          version_next_action:state.nextAction,
+          schema,
+          change_summary:{ summary:document.querySelector("#changeSummary").value.trim(), questionCount:countQuestions(schema) },
+          visibility_policy:{ visibleToEmployees:false, visibleToManagers:false, visibleToHrbp:true, visibleToHrAdmin:true },
+          created_by:currentUser.id,
+        };
+        await supabaseFetch("/rest/v1/form_template_versions", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(item) });
+        await writeAudit("form_version.created", item, null, state.status, { owner:state.owner, nextAction:state.nextAction, parentVersionId:item.parent_version_id });
+        showMessage("Edit version created and audit event written.", "success");
+        await loadVersions();
+      }
+      async function handleAction(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/form_template_versions?id=eq.${id}&select=*`);
+        const stateMap = { update:"draft_edit", submit:"submitted", approve:"approved", publish:"published", return:"returned", archive:"archived", visibility:current.version_status };
+        const state = stateByStatus[stateMap[action]];
+        const patch = { version_status:state.status, version_owner_role:state.owner, version_next_action:state.nextAction };
+        if (action === "update") { patch.schema = JSON.parse(schemaJson.value); patch.change_summary = { ...(current.change_summary || {}), summary:document.querySelector("#changeSummary").value.trim(), questionCount:countQuestions(patch.schema) }; }
+        if (action === "submit") patch.submitted_at = new Date().toISOString();
+        if (action === "approve") patch.approved_at = new Date().toISOString();
+        if (action === "publish") { patch.status = "published"; patch.published_at = new Date().toISOString(); patch.published_by = currentUser.id; }
+        if (action === "return") { patch.returned_at = new Date().toISOString(); patch.last_return_reason = "Returned from temporary scaffold"; }
+        if (action === "archive") { patch.status = "archived"; patch.archived_at = new Date().toISOString(); }
+        if (action === "visibility") { patch.visibility_policy = { ...(current.visibility_policy || {}), visibleToManagers: current.visibility_policy?.visibleToManagers !== true }; patch.visibility_changed_at = new Date().toISOString(); }
+        await supabaseFetch(`/rest/v1/form_template_versions?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        if (action === "publish") await supabaseFetch(`/rest/v1/form_templates?id=eq.${current.template_id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ status:"published", owner_role:"HRBP", current_version_id:id, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+        const auditAction = action === "visibility" ? "form_version.visibility_changed" : `form_version.${action === "return" ? "returned" : action === "archive" ? "archived" : action === "publish" ? "published" : action === "approve" ? "approved" : action === "update" ? "updated" : "submitted"}`;
+        await writeAudit(auditAction, current, current.version_status, state.status, { owner:state.owner, nextAction:state.nextAction, reason:patch.last_return_reason || null });
+        showMessage("Form version action saved and audit event written.", "success");
+        await loadTemplates();
+        await loadVersions();
+      }
+      document.querySelector("#editForm").addEventListener("submit", createEdit);
+      document.querySelector("#templateId").addEventListener("change", () => { syncSchema(); loadVersions().catch((error) => showMessage(error.message, "error")); });
+      document.querySelector("#reloadButton").addEventListener("click", () => loadVersions().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadTemplates(); await loadVersions(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load form versions"; } })();
+    </script>
+  </body>
+</html>

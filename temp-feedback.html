@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Feedback Requests</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1220px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form,.grid { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:92px; resize:vertical; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.closed { background:#eef0f1; color:#51616a; }
+      .pill.extended { background:#fff1d6; color:#7a4f00; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form,.grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Feedback Requests</h1>
+          <p>Feedback flow with active-recipient search, anonymity threshold guards, extension, close, and audit trail.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Request</h2>
+        <form id="createForm">
+          <label>Subject<select id="subjectUserId"></select></label>
+          <label>Recipient<select id="recipientUserId" required></select></label>
+          <label>Anonymous<select id="isAnonymous"><option value="true">Yes</option><option value="false">No</option></select></label>
+          <label>Min Responses<input id="minResponseCount" type="number" min="1" max="20" value="3" /></label>
+          <label>Due Date<input id="dueAt" type="datetime-local" /></label>
+          <label class="full">Title<input id="title" value="Quick feedback request" required /></label>
+          <label class="full">Question<textarea id="question" required>What should this person continue, stop, and start?</textarea></label>
+          <button type="submit">Create feedback request</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Requests</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Request</th><th>State</th><th>Privacy Guard</th><th>Responses</th><th>Dates</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        draft:{ status:"draft", owner:"REQUESTER", nextAction:"submit_request" },
+        open:{ status:"open", owner:"RECIPIENTS", nextAction:"submit_response" },
+        extended:{ status:"extended", owner:"RECIPIENTS", nextAction:"submit_response" },
+        completed:{ status:"completed", owner:"REQUESTER", nextAction:"close" },
+        closed:{ status:"closed", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      function localDateToIso(value) { return value ? new Date(value).toISOString() : null; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      async function writeAudit(action, request, fromStatus, toStatus, metadata = {}) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:request.subject_user_id || request.requester_user_id, action, entity_type:"feedback_request", entity_id:request.id, from_status:fromStatus, to_status:toStatus, metadata:{ owner:metadata.owner, nextAction:metadata.nextAction, isAnonymous:request.is_anonymous, responseCount:request.response_count, ...metadata } }) });
+      }
+      async function loadRecipients() {
+        const profiles = await supabaseFetch("/rest/v1/profiles?select=id,display_name,email,role_code,account_status&account_status=eq.active&order=display_name.asc&limit=200");
+        const options = profiles.map((profile) => `<option value="${profile.id}">${profile.display_name} · ${profile.role_code}</option>`).join("");
+        document.querySelector("#subjectUserId").innerHTML = options;
+        document.querySelector("#recipientUserId").innerHTML = options;
+      }
+      async function loadRequests() {
+        const requests = await supabaseFetch("/rest/v1/feedback_requests?select=*&order=updated_at.desc");
+        countLabel.textContent = `${requests.length} request${requests.length === 1 ? "" : "s"}`;
+        rows.innerHTML = requests.map((item) => {
+          const canZeroResolve = item.is_anonymous && Number(item.response_count || 0) === 0 && ["open","extended"].includes(item.status);
+          const canRelease = !item.is_anonymous || Number(item.response_count || 0) >= Number(item.min_response_count || 3);
+          return `<tr>
+            <td><strong>${item.title}</strong><p>${item.question}</p><div class="muted"><code>${item.id}</code></div></td>
+            <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div><div class="muted">${item.is_anonymous ? "anonymous" : "named"}</div></td>
+            <td><span class="pill ${item.anonymity_status || "not_anonymous"}">${item.anonymity_status || "not_anonymous"}</span><div class="muted">Min ${item.min_response_count || (item.is_anonymous ? 3 : 1)} · ${canRelease ? "release allowed" : "guard active"}</div><div class="muted">${item.min_response_guard_reason || ""}</div></td>
+            <td>${item.response_count}</td>
+            <td><div>Due: ${item.due_at ? new Date(item.due_at).toLocaleString("fa-IR") : "-"}</div><div class="muted">Extended: ${item.extended_until ? new Date(item.extended_until).toLocaleString("fa-IR") : "-"}</div></td>
+            <td class="actions">
+              ${item.status === "draft" ? `<button data-action="submit" data-id="${item.id}">Submit request</button>` : ""}
+              ${["open","extended"].includes(item.status) ? `<button data-action="respond" data-id="${item.id}">Respond</button>` : ""}
+              ${canZeroResolve ? `<button class="warning" data-action="extend" data-id="${item.id}">Extend zero-response</button>` : ""}
+              ${item.is_anonymous ? `<button class="secondary" data-action="review_anonymity" data-id="${item.id}">Review guard</button>` : ""}
+              ${item.is_anonymous && canRelease ? `<button data-action="release_anonymity" data-id="${item.id}">Release anonymous</button>` : ""}
+              ${["open","extended","completed"].includes(item.status) ? `<button class="secondary" data-action="close" data-id="${item.id}">Close</button>` : ""}
+              ${item.status !== "closed" ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button>` : ""}
+            </td>
+          </tr>`;
+        }).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function createRequest(event) {
+        event.preventDefault();
+        const state = stateByStatus.draft;
+        const id = crypto.randomUUID();
+        const request = {
+          id,
+          requester_user_id:currentUser.id,
+          subject_user_id:document.querySelector("#subjectUserId").value,
+          status:state.status,
+          owner_role:state.owner,
+          next_action:state.nextAction,
+          title:document.querySelector("#title").value.trim(),
+          question:document.querySelector("#question").value.trim().replace(/\s+/g, " "),
+          is_anonymous:document.querySelector("#isAnonymous").value === "true",
+          min_response_count:document.querySelector("#isAnonymous").value === "true" ? Number(document.querySelector("#minResponseCount").value || 3) : 1,
+          anonymity_status:document.querySelector("#isAnonymous").value === "true" ? "collecting" : "not_anonymous",
+          anonymity_checked_at:new Date().toISOString(),
+          min_response_guard_reason:document.querySelector("#isAnonymous").value === "true" ? "Anonymous request has zero responses and can be extended or closed." : "Named feedback does not require an anonymity threshold.",
+          visibility:{ requesterCanView:true, subjectCanView:false, hrbpCanView:true },
+          due_at:localDateToIso(document.querySelector("#dueAt").value),
+          response_count:0,
+          created_by:currentUser.id,
+          updated_by:currentUser.id,
+        };
+        await supabaseFetch("/rest/v1/feedback_requests", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(request) });
+        await supabaseFetch("/rest/v1/feedback_request_recipients", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ feedback_request_id:id, recipient_user_id:document.querySelector("#recipientUserId").value }) });
+        await writeAudit("feedback.created", request, null, state.status, { owner:state.owner, nextAction:state.nextAction });
+        showMessage("Feedback request created and audit event written.", "success");
+        await loadRequests();
+      }
+      async function handleAction(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/feedback_requests?id=eq.${id}&select=*`);
+        if (!current) throw new Error("Feedback request not found");
+        if (action === "submit") {
+          const state = stateByStatus.open;
+          await patchRequest(current, { status:state.status, owner_role:state.owner, next_action:state.nextAction, submitted_at:new Date().toISOString() }, "feedback.submitted", state);
+        }
+        if (action === "respond") {
+          const responseText = prompt("Write feedback response", "Clear, useful feedback goes here.");
+          if (!responseText) return;
+          const state = stateByStatus.completed;
+          await supabaseFetch("/rest/v1/feedback_responses", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ feedback_request_id:id, recipient_user_id:currentUser.id, response_text:responseText, is_anonymous:current.is_anonymous }) });
+          const nextCount = Number(current.response_count || 0) + 1;
+          const minCount = Number(current.min_response_count || 3);
+          const guardMet = !current.is_anonymous || nextCount >= minCount;
+          const nextState = guardMet ? state : stateByStatus[current.status];
+          const anonymityStatus = !current.is_anonymous ? "not_anonymous" : guardMet ? "releasable" : "guarded";
+          const reason = !current.is_anonymous ? "Named feedback does not require an anonymity threshold." : guardMet ? "Minimum anonymous response threshold has been met." : `Anonymous responses are hidden until at least ${minCount} responses are submitted.`;
+          await patchRequest(current, { status:nextState.status, owner_role:nextState.owner, next_action:nextState.nextAction, response_count:nextCount, anonymity_status:anonymityStatus, anonymity_checked_at:new Date().toISOString(), min_response_guard_reason:reason }, "feedback.response_submitted", nextState);
+        }
+        if (action === "review_anonymity") {
+          const minCount = Number(current.min_response_count || 3);
+          const count = Number(current.response_count || 0);
+          const status = !current.is_anonymous ? "not_anonymous" : count === 0 ? "collecting" : count < minCount ? "guarded" : current.responses_released_at ? "released" : "releasable";
+          const reason = status === "collecting" ? "Anonymous request has zero responses and can be extended or closed." : status === "guarded" ? `Anonymous responses are hidden until at least ${minCount} responses are submitted.` : status === "releasable" ? "Minimum anonymous response threshold has been met." : "Anonymous responses released.";
+          await patchRequest(current, { anonymity_status:status, anonymity_checked_at:new Date().toISOString(), min_response_guard_reason:reason }, "feedback.anonymity_checked", stateByStatus[current.status]);
+        }
+        if (action === "release_anonymity") {
+          if (current.is_anonymous && Number(current.response_count || 0) < Number(current.min_response_count || 3)) throw new Error("Anonymous feedback cannot be released until the minimum response count is met.");
+          await supabaseFetch(`/rest/v1/feedback_responses?feedback_request_id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ released_at:new Date().toISOString(), anonymity_release_batch_id:crypto.randomUUID() }) });
+          await patchRequest(current, { anonymity_status:"released", responses_released_at:new Date().toISOString(), min_response_guard_reason:"Minimum anonymous response threshold met." }, "feedback.anonymity_released", stateByStatus[current.status]);
+        }
+        if (action === "extend") {
+          if (!current.is_anonymous || Number(current.response_count || 0) !== 0) throw new Error("Only anonymous zero-response requests can be extended here.");
+          const state = stateByStatus.extended;
+          const extendedUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+          await patchRequest(current, { status:state.status, owner_role:state.owner, next_action:state.nextAction, extended_until:extendedUntil }, "feedback.extended", state);
+        }
+        if (action === "close") {
+          const state = stateByStatus.closed;
+          await patchRequest(current, { status:state.status, owner_role:state.owner, next_action:state.nextAction, closed_at:new Date().toISOString(), closed_reason:"Closed from temporary scaffold" }, "feedback.closed", state);
+        }
+        if (action === "visibility") {
+          const state = stateByStatus[current.status];
+          await patchRequest(current, { visibility:{ requesterCanView:true, subjectCanView:true, hrbpCanView:true }, visibility_changed_at:new Date().toISOString() }, "feedback.visibility_changed", state);
+        }
+        showMessage("Feedback action saved and audit event written.", "success");
+        await loadRequests();
+      }
+      async function patchRequest(current, patch, auditAction, state) {
+        await supabaseFetch(`/rest/v1/feedback_requests?id=eq.${current.id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ ...patch, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+        await writeAudit(auditAction, current, current.status, state.status, { owner:state.owner, nextAction:state.nextAction });
+      }
+      document.querySelector("#createForm").addEventListener("submit", createRequest);
+      document.querySelector("#reloadButton").addEventListener("click", () => loadRequests().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadRecipients(); await loadRequests(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load feedback requests"; } })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/promotion-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/promotionWorkflow.d.ts",
+      "default": "./src/promotionWorkflow.mjs"
+    }
+  }
+}

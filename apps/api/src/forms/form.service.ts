@@ -4,6 +4,13 @@ import {
   getFormBuilderState,
   transitionFormBuilderState,
 } from "@bimebazar/form-builder-workflow";
+import {
+  formVersionActions,
+  formVersionStatuses,
+  getFormVersionState,
+  summarizeFormSchema,
+  transitionFormVersionState,
+} from "@bimebazar/form-versioning-workflow";
 import { writeAuditEvent } from "../audit/audit.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 import type { AuthUser } from "../auth/auth.types.js";
@@ -14,7 +21,13 @@ const templateSelect = `
   id,name,description,module,status,owner_role,current_version_id,
   template_key,template_category,is_system_template,source_template_id,
   created_by,updated_by,created_at,updated_at,
-  form_template_versions(id,version_number,status,schema,created_at,published_at)
+  form_template_versions(id,parent_version_id,version_number,status,version_status,version_owner_role,version_next_action,schema,change_summary,visibility_policy,created_at,published_at,submitted_at,approved_at,returned_at,archived_at,visibility_changed_at,last_return_reason)
+`;
+
+const versionSelect = `
+  id,template_id,parent_version_id,version_number,status,version_status,version_owner_role,version_next_action,
+  schema,change_summary,visibility_policy,submitted_at,approved_at,returned_at,archived_at,visibility_changed_at,
+  last_return_reason,created_by,published_by,created_at,published_at
 `;
 
 interface FormTemplateInput {
@@ -58,6 +71,17 @@ export async function getFormTemplate(id: string) {
   const { data, error } = await admin.from("form_templates").select(templateSelect).eq("id", id).single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function listFormVersionEdits(input: { templateId: string }) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("form_template_versions")
+    .select(versionSelect)
+    .eq("template_id", input.templateId)
+    .order("version_number", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 export async function createFormTemplate(input: FormTemplateInput) {
@@ -270,6 +294,185 @@ export async function updateFormTemplate(input: {
   return getFormTemplate(input.id);
 }
 
+export async function createFormVersionEdit(input: {
+  actor: AuthUser;
+  templateId: string;
+  schema?: unknown;
+  changeSummary?: Record<string, unknown>;
+}) {
+  const admin = createSupabaseAdminClient();
+  const template = await getFormTemplate(input.templateId);
+  const currentVersion = getCurrentVersion(template);
+  const state = getFormVersionState(formVersionStatuses.DRAFT_EDIT);
+  const nextVersionNumber = getNextVersionNumber(template);
+  const schema = input.schema ?? currentVersion?.schema ?? { title: template.name, sections: [] };
+  const { data, error } = await admin
+    .from("form_template_versions")
+    .insert({
+      template_id: input.templateId,
+      parent_version_id: currentVersion?.id ?? null,
+      version_number: nextVersionNumber,
+      status: "draft",
+      version_status: state.status,
+      version_owner_role: state.owner,
+      version_next_action: state.nextAction,
+      schema,
+      change_summary: {
+        ...summarizeFormSchema(schema),
+        ...(input.changeSummary ?? {}),
+      },
+      visibility_policy: defaultVersionVisibility(),
+      created_by: input.actor.id,
+    })
+    .select(versionSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditFormVersion(input.actor, data, "form_version.created", null, state, {
+    parentVersionId: currentVersion?.id ?? null,
+    visibilityChanges: diffVisibilityRules(currentVersion?.schema, schema),
+  });
+  return data;
+}
+
+export async function updateFormVersionEdit(input: {
+  actor: AuthUser;
+  templateId: string;
+  versionId: string;
+  schema?: unknown;
+  changeSummary?: Record<string, unknown>;
+}) {
+  const current = await getFormVersion(input.versionId);
+  assertVersionBelongsToTemplate(current, input.templateId);
+  const state = transitionFormVersionState(current.version_status, formVersionActions.UPDATE);
+  const schema = input.schema ?? current.schema;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("form_template_versions")
+    .update({
+      schema,
+      version_status: state.status,
+      version_owner_role: state.owner,
+      version_next_action: state.nextAction,
+      change_summary: {
+        ...(current.change_summary ?? {}),
+        ...summarizeFormSchema(schema),
+        ...(input.changeSummary ?? {}),
+      },
+    })
+    .eq("id", input.versionId)
+    .select(versionSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditFormVersion(input.actor, data, "form_version.updated", current.version_status, state, {
+    visibilityChanges: diffVisibilityRules(current.schema, schema),
+  });
+  const visibilityChanges = diffVisibilityRules(current.schema, schema);
+  if (visibilityChanges.length > 0) {
+    await auditFormVersion(input.actor, data, "form_version.visibility_changed", current.version_status, state, { visibilityChanges });
+  }
+  return data;
+}
+
+export async function submitFormVersionEdit(input: { actor: AuthUser; templateId: string; versionId: string }) {
+  return moveFormVersion(input.actor, input.templateId, input.versionId, formVersionActions.SUBMIT, "form_version.submitted", {
+    submitted_at: new Date().toISOString(),
+  });
+}
+
+export async function approveFormVersionEdit(input: { actor: AuthUser; templateId: string; versionId: string }) {
+  return moveFormVersion(input.actor, input.templateId, input.versionId, formVersionActions.APPROVE, "form_version.approved", {
+    approved_at: new Date().toISOString(),
+  });
+}
+
+export async function returnFormVersionEdit(input: { actor: AuthUser; templateId: string; versionId: string; reason: string }) {
+  return moveFormVersion(input.actor, input.templateId, input.versionId, formVersionActions.RETURN, "form_version.returned", {
+    returned_at: new Date().toISOString(),
+    last_return_reason: input.reason,
+    reason: input.reason,
+  });
+}
+
+export async function archiveFormVersionEdit(input: { actor: AuthUser; templateId: string; versionId: string }) {
+  return moveFormVersion(input.actor, input.templateId, input.versionId, formVersionActions.ARCHIVE, "form_version.archived", {
+    archived_at: new Date().toISOString(),
+    status: "archived",
+  });
+}
+
+export async function publishFormVersionEdit(input: { actor: AuthUser; templateId: string; versionId: string }) {
+  const admin = createSupabaseAdminClient();
+  const current = await getFormVersion(input.versionId);
+  assertVersionBelongsToTemplate(current, input.templateId);
+  const state = transitionFormVersionState(current.version_status, formVersionActions.PUBLISH);
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("form_template_versions")
+    .update({
+      status: "published",
+      version_status: state.status,
+      version_owner_role: state.owner,
+      version_next_action: state.nextAction,
+      published_by: input.actor.id,
+      published_at: now,
+    })
+    .eq("id", input.versionId)
+    .select(versionSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  const { error: templateError } = await admin
+    .from("form_templates")
+    .update({
+      status: "published",
+      owner_role: "HRBP",
+      current_version_id: input.versionId,
+      updated_by: input.actor.id,
+      updated_at: now,
+    })
+    .eq("id", input.templateId);
+  if (templateError) throw new Error(templateError.message);
+  await auditFormVersion(input.actor, data, "form_version.published", current.version_status, state, {
+    previousCurrentVersionId: current.parent_version_id,
+  });
+  await notifyFormTemplateChanged({
+    templateId: input.templateId,
+    status: "published",
+    action: "published",
+    questionCount: countQuestions(current.schema),
+  });
+  return getFormTemplate(input.templateId);
+}
+
+export async function updateFormVersionVisibility(input: {
+  actor: AuthUser;
+  templateId: string;
+  versionId: string;
+  visibilityPolicy: Record<string, unknown>;
+}) {
+  const current = await getFormVersion(input.versionId);
+  assertVersionBelongsToTemplate(current, input.templateId);
+  const state = transitionFormVersionState(current.version_status, formVersionActions.OVERRIDE_VISIBILITY);
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("form_template_versions")
+    .update({
+      version_status: state.status,
+      version_owner_role: state.owner,
+      version_next_action: state.nextAction,
+      visibility_policy: input.visibilityPolicy,
+      visibility_changed_at: new Date().toISOString(),
+    })
+    .eq("id", input.versionId)
+    .select(versionSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditFormVersion(input.actor, data, "form_version.visibility_changed", current.version_status, state, {
+    from: current.visibility_policy,
+    to: input.visibilityPolicy,
+  });
+  return data;
+}
+
 export async function publishFormTemplate(input: { actor: AuthUser; id: string }) {
   const admin = createSupabaseAdminClient();
   const current = await getFormTemplate(input.id);
@@ -462,4 +665,82 @@ function diffVisibilityRules(previousSchema: unknown, nextSchema: unknown) {
       previous: previous.get(questionId) ?? null,
       next: next.get(questionId) ?? null,
     }));
+}
+
+async function getFormVersion(versionId: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("form_template_versions").select(versionSelect).eq("id", versionId).single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+function assertVersionBelongsToTemplate(version: { template_id: string }, templateId: string) {
+  if (version.template_id !== templateId) throw new Error("Form version does not belong to this template");
+}
+
+async function moveFormVersion(
+  actor: AuthUser,
+  templateId: string,
+  versionId: string,
+  action: string,
+  auditAction: string,
+  patch: Record<string, unknown>,
+) {
+  const current = await getFormVersion(versionId);
+  assertVersionBelongsToTemplate(current, templateId);
+  const state = transitionFormVersionState(current.version_status, action);
+  const { reason, ...dbPatch } = patch;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("form_template_versions")
+    .update({
+      version_status: state.status,
+      version_owner_role: state.owner,
+      version_next_action: state.nextAction,
+      ...dbPatch,
+    })
+    .eq("id", versionId)
+    .select(versionSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditFormVersion(actor, data, auditAction, current.version_status, state, {
+    reason: typeof reason === "string" ? reason : undefined,
+  });
+  return data;
+}
+
+async function auditFormVersion(
+  actor: AuthUser,
+  version: { id: string; template_id: string; version_number: number; parent_version_id?: string | null },
+  action: string,
+  fromStatus: string | null,
+  state: { status: string; owner: string; nextAction: string | null },
+  metadata: Record<string, unknown> = {},
+) {
+  await writeAuditEvent({
+    actorUserId: actor.id,
+    action,
+    entityType: "form_template_version",
+    entityId: version.id,
+    fromStatus,
+    toStatus: state.status,
+    reason: typeof metadata.reason === "string" ? metadata.reason : undefined,
+    metadata: {
+      templateId: version.template_id,
+      versionNumber: version.version_number,
+      parentVersionId: version.parent_version_id ?? null,
+      owner: state.owner,
+      nextAction: state.nextAction,
+      ...metadata,
+    },
+  });
+}
+
+function defaultVersionVisibility() {
+  return {
+    visibleToEmployees: false,
+    visibleToManagers: false,
+    visibleToHrbp: true,
+    visibleToHrAdmin: true,
+  };
 }

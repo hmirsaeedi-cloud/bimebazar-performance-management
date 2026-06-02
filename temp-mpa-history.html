@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar MPA History</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form,.filters { display:grid; grid-template-columns:repeat(3,minmax(180px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:82px; resize:vertical; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.returned { background:#fff1d6; color:#7a4f00; }
+      .pill.archived { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form,.filters { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>MPA History & Versioning</h1>
+          <p>Capture MPA snapshots, review versions, restore approved history, and audit every change.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Capture Version</h2>
+        <form id="captureForm">
+          <label class="full">MPA<select id="mpaId" required></select></label>
+          <label class="full">Comparison Summary<textarea id="comparisonSummary">Snapshot captured for audit and restore validation.</textarea></label>
+          <button type="submit">Capture snapshot</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Version History</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Version</th><th>Snapshot</th><th>State</th><th>Visibility</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let mpas = [];
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        captured:{ status:"captured", owner:"HRBP", nextAction:"approve" },
+        reviewed:{ status:"reviewed", owner:"MANAGER", nextAction:"restore" },
+        restored:{ status:"restored", owner:"SYSTEM", nextAction:null },
+        returned:{ status:"returned", owner:"MANAGER", nextAction:"approve" },
+        archived:{ status:"archived", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.employee_id, action, entity_type:"mpa_history_version", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason:metadata.reason || null, metadata:{ mpaId:item.mpa_id, cycleId:item.cycle_id, versionNumber:item.version_number, owner:metadata.owner, nextAction:metadata.nextAction, ...metadata } }) });
+      }
+      async function loadMpas() {
+        mpas = await supabaseFetch("/rest/v1/mpas?select=*&order=updated_at.desc&limit=200");
+        document.querySelector("#mpaId").innerHTML = mpas.map((mpa) => `<option value="${mpa.id}">${mpa.title} · ${mpa.status} · ${mpa.id.slice(0,8)}</option>`).join("");
+      }
+      async function loadHistory() {
+        const mpaId = document.querySelector("#mpaId").value;
+        if (!mpaId) { rows.innerHTML = ""; countLabel.textContent = "No MPA selected"; return; }
+        const versions = await supabaseFetch(`/rest/v1/mpa_history_versions?mpa_id=eq.${mpaId}&select=*&order=version_number.desc`);
+        countLabel.textContent = `${versions.length} version${versions.length === 1 ? "" : "s"}`;
+        rows.innerHTML = versions.map((item) => {
+          const visible = item.approval_visibility?.employeeCanViewHistoryVersion === true;
+          return `<tr>
+            <td><strong>v${item.version_number}</strong><div class="muted"><code>${item.id}</code></div><div class="muted">Source: ${item.source_mpa_status}</div></td>
+            <td><strong>${item.title}</strong><p>${item.content_plain_text || item.snapshot?.contentPlainText || ""}</p><div class="muted"><code>${JSON.stringify(item.comparison_summary || {})}</code></div></td>
+            <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+            <td><span class="pill">${visible ? "employee visible" : "hidden"}</span></td>
+            <td class="actions">
+              ${["captured","returned"].includes(item.status) ? `<button data-action="review" data-id="${item.id}">Review</button>` : ""}
+              ${item.status === "captured" ? `<button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+              ${item.status === "reviewed" ? `<button data-action="restore" data-id="${item.id}">Restore</button>` : ""}
+              ${item.status !== "archived" ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button><button class="secondary" data-action="archive" data-id="${item.id}">Archive</button>` : ""}
+            </td>
+          </tr>`;
+        }).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function captureVersion(event) {
+        event.preventDefault();
+        const mpaId = document.querySelector("#mpaId").value;
+        const [mpa] = await supabaseFetch(`/rest/v1/mpas?id=eq.${mpaId}&select=*`);
+        const existing = await supabaseFetch(`/rest/v1/mpa_history_versions?mpa_id=eq.${mpaId}&select=version_number&order=version_number.desc&limit=1`);
+        const state = stateByStatus.captured;
+        const version = {
+          id:crypto.randomUUID(),
+          mpa_id:mpa.id,
+          employee_id:mpa.employee_id,
+          cycle_id:mpa.cycle_id,
+          version_number:Number(existing[0]?.version_number || 0) + 1,
+          status:state.status,
+          owner_role:state.owner,
+          next_action:state.nextAction,
+          source_mpa_status:mpa.status,
+          title:mpa.title,
+          content:mpa.content,
+          content_format:mpa.content_format || "structured",
+          content_plain_text:mpa.content_plain_text,
+          approval_visibility:mpa.approval_visibility || {},
+          snapshot:{ title:mpa.title, status:mpa.status, contentPlainText:mpa.content_plain_text || "" },
+          comparison_summary:{ summary:document.querySelector("#comparisonSummary").value.trim() },
+          created_by:currentUser.id,
+          updated_by:currentUser.id,
+        };
+        await supabaseFetch("/rest/v1/mpa_history_versions", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(version) });
+        await writeAudit("mpa.history_captured", version, null, state.status, { owner:state.owner, nextAction:state.nextAction });
+        showMessage("MPA version captured and audit event written.", "success");
+        await loadHistory();
+      }
+      async function handleAction(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/mpa_history_versions?id=eq.${id}&select=*`);
+        const stateMap = { review:"reviewed", return:"returned", archive:"archived", restore:"restored", visibility:current.status };
+        const state = stateByStatus[stateMap[action]];
+        const patch = { status:state.status, owner_role:state.owner, next_action:state.nextAction, updated_by:currentUser.id, updated_at:new Date().toISOString() };
+        if (action === "review") patch.reviewed_at = new Date().toISOString();
+        if (action === "return") { patch.returned_at = new Date().toISOString(); patch.last_return_reason = "Returned from temporary scaffold"; }
+        if (action === "archive") patch.archived_at = new Date().toISOString();
+        if (action === "restore") patch.restored_at = new Date().toISOString();
+        if (action === "visibility") {
+          patch.status = current.status;
+          patch.owner_role = current.owner_role;
+          patch.next_action = current.next_action;
+          patch.approval_visibility = { ...(current.approval_visibility || {}), employeeCanViewHistoryVersion: current.approval_visibility?.employeeCanViewHistoryVersion !== true };
+        }
+        await supabaseFetch(`/rest/v1/mpa_history_versions?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        if (action === "restore") {
+          await supabaseFetch(`/rest/v1/mpas?id=eq.${current.mpa_id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ title:current.title, content:current.content, content_format:current.content_format, content_plain_text:current.content_plain_text, approval_visibility:current.approval_visibility, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+        }
+        const auditAction = action === "visibility" ? "mpa.history_visibility_changed" : `mpa.history_${action === "review" ? "reviewed" : action === "return" ? "returned" : action === "archive" ? "archived" : "restored"}`;
+        await writeAudit(auditAction, current, current.status, patch.status, { owner:patch.owner_role, nextAction:patch.next_action, reason:patch.last_return_reason || null });
+        if (action === "restore") await writeAudit("mpa.updated", { ...current, id:current.mpa_id }, current.source_mpa_status, current.source_mpa_status, { restoredFromVersion:current.version_number });
+        showMessage("MPA history action saved and audit event written.", "success");
+        await loadHistory();
+      }
+      document.querySelector("#captureForm").addEventListener("submit", captureVersion);
+      document.querySelector("#mpaId").addEventListener("change", () => loadHistory().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#reloadButton").addEventListener("click", () => loadHistory().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadMpas(); await loadHistory(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load MPA history"; } })();
+    </script>
+  </body>
+</html>

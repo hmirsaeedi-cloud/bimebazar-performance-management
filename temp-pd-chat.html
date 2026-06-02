@@ -56,7 +56,7 @@
       <header>
         <div>
           <h1>PD Chat Logging</h1>
-          <p>Employee and manager development conversations with explicit workflow status, owner, and next action.</p>
+          <p>Employee and manager development conversations with evaluation auto-attach, explicit workflow status, owner, and next action.</p>
         </div>
         <nav>
           <a href="/temp-end-cycle-evaluation.html">Evaluation</a>
@@ -70,6 +70,7 @@
           <label>Employee<select id="employeeId" required></select></label>
           <label>Manager<select id="managerId"></select></label>
           <label>Process<select id="processId"></select></label>
+          <label>Evaluation<select id="evaluationId"></select></label>
           <label>Topic<input id="topic" value="Quarterly development check-in" required /></label>
           <label style="grid-column: 1 / -1">First message<textarea id="messageText" required>I want to discuss growth goals and support needed for the next cycle.</textarea></label>
           <button type="submit">Create chat</button>
@@ -91,6 +92,7 @@
               <th>Topic</th>
               <th>People</th>
               <th>Status</th>
+              <th>Evaluation Attachment</th>
               <th>Owner / Next</th>
               <th>Messages</th>
               <th>Move</th>
@@ -108,6 +110,8 @@
       let currentUser = null;
       let profiles = [];
       let processes = [];
+      let evaluations = [];
+      let attachments = [];
       let chats = [];
 
       const message = document.querySelector("#message");
@@ -175,6 +179,19 @@
         return table[status]?.[action];
       }
 
+      function attachmentState(action, hasChat) {
+        const state = hasChat
+          ? { status: "attached", owner: "SYSTEM", nextAction: null }
+          : { status: "missing_chat", owner: "MANAGER", nextAction: "override_attach" };
+        return {
+          ...state,
+          action: hasChat ? "pd_chat.auto_attached_to_evaluation" : "pd_chat.auto_attach_missing",
+          notificationAction: hasChat ? "attached" : "missing_chat",
+          fromStatus: "matched",
+          workflowAction: hasChat ? "auto_attach" : "mark_missing",
+        };
+      }
+
       async function writeAudit(action, entityId, targetUserId, fromStatus, toStatus, metadata, reason = null) {
         await supabaseFetch("/rest/v1/audit_events", {
           method: "POST",
@@ -193,6 +210,23 @@
         });
       }
 
+      async function writeAttachmentAudit(action, attachment, fromStatus, toStatus, metadata) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: attachment.employee_id,
+            action,
+            entity_type: "pd_chat_evaluation_attachment",
+            entity_id: attachment.id,
+            from_status: fromStatus,
+            to_status: toStatus,
+            metadata,
+          }),
+        });
+      }
+
       function newMessage(body) {
         return {
           id: crypto.randomUUID(),
@@ -206,18 +240,36 @@
       }
 
       async function loadData() {
-        [profiles, processes] = await Promise.all([
+        [profiles, processes, evaluations] = await Promise.all([
           supabaseFetch("/rest/v1/profiles?select=id,display_name,email,manager_id,account_status&account_status=eq.active&order=display_name"),
           supabaseFetch("/rest/v1/performance_processes?select=id,name,status,process_type&order=created_at.desc"),
+          loadEvaluationOptions(),
         ]);
         fillSelect(document.querySelector("#employeeId"), profiles, "Select employee", (item) => item.display_name || item.email);
         fillSelect(document.querySelector("#managerId"), profiles, "Auto manager", (item) => item.display_name || item.email);
         fillSelect(document.querySelector("#processId"), processes, "No process", (item) => item.name);
+        fillSelect(document.querySelector("#evaluationId"), evaluations, "Attach later", (item) => `${item.label} - ${profileName(item.employee_id)}`);
         await loadChats();
       }
 
+      async function loadEvaluationOptions() {
+        const [endCycle, midCycle, downward] = await Promise.all([
+          supabaseFetch("/rest/v1/end_cycle_evaluations?select=id,process_id,employee_id,manager_id,status&order=updated_at.desc"),
+          supabaseFetch("/rest/v1/mid_cycle_evaluations?select=id,process_id,employee_id,manager_id,status&order=updated_at.desc"),
+          supabaseFetch("/rest/v1/process_downward_evaluations?select=id,process_id,employee_id,manager_id,status&order=updated_at.desc"),
+        ]);
+        return [
+          ...endCycle.map((item) => ({ ...item, type: "end_cycle_evaluation", label: `End-cycle ${item.status}` })),
+          ...midCycle.map((item) => ({ ...item, type: "mid_cycle_evaluation", label: `Mid-cycle ${item.status}` })),
+          ...downward.map((item) => ({ ...item, type: "downward_evaluation", label: `Downward ${item.status}` })),
+        ];
+      }
+
       async function loadChats() {
-        chats = await supabaseFetch("/rest/v1/pd_chat_logs?select=*&order=updated_at.desc");
+        [chats, attachments] = await Promise.all([
+          supabaseFetch("/rest/v1/pd_chat_logs?select=*&order=updated_at.desc"),
+          supabaseFetch("/rest/v1/pd_chat_evaluation_attachments?select=*&order=updated_at.desc"),
+        ]);
         countLabel.textContent = `${chats.length} chat log${chats.length === 1 ? "" : "s"}`;
         rows.innerHTML = chats.map((chat) => `
           <tr>
@@ -230,6 +282,7 @@
               <div class="muted">Manager: ${profileName(chat.manager_id)}</div>
             </td>
             <td><span class="pill">${chat.status}</span></td>
+            <td>${renderAttachment(chat)}</td>
             <td>
               <div>${chat.owner_role}</div>
               <div class="muted">${chat.next_action || "No next action"}</div>
@@ -241,6 +294,17 @@
         document.querySelectorAll("[data-action]").forEach((button) => {
           button.addEventListener("click", () => moveChat(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error")));
         });
+      }
+
+      function renderAttachment(chat) {
+        const attachment = attachments.find((item) => item.pd_chat_log_id === chat.id || item.evaluation_id === chat.attached_evaluation_id);
+        const evaluation = evaluations.find((item) => item.id === (attachment?.evaluation_id || chat.attached_evaluation_id || chat.evaluation_id));
+        if (!attachment && !evaluation) return `<span class="muted">Not attached</span>`;
+        return `
+          <span class="pill">${attachment?.status || "linked"}</span>
+          <div class="muted">${evaluation?.label || attachment?.evaluation_type || chat.attached_evaluation_type || "Evaluation"}</div>
+          <div class="muted">${attachment?.next_action || "No next action"}</div>
+        `;
       }
 
       function renderMessages(messages) {
@@ -262,11 +326,17 @@
           manager_reviewed: [["visibility", "Share visibility"], ["archive", "Archive"], ["return", "Return"]],
           visibility_approved: [["archive", "Archive"]],
         }[chat.status] || [];
+        const canAttach = evaluations.some((item) => item.employee_id === chat.employee_id);
+        if (canAttach && chat.status !== "archived") actions.push(["attach", "Auto attach"]);
         return actions.map(([action, label]) => `<button data-id="${chat.id}" data-action="${action}" class="${action === "return" ? "warning" : action === "archive" ? "danger" : ""}">${label}</button>`).join("");
       }
 
       async function moveChat(id, action) {
         const [current] = await supabaseFetch(`/rest/v1/pd_chat_logs?id=eq.${id}&select=*`);
+        if (action === "attach") {
+          await autoAttachChat(current);
+          return;
+        }
         const next = stateFor(current.status, action);
         if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
         const now = new Date().toISOString();
@@ -316,12 +386,84 @@
         await loadChats();
       }
 
+      async function autoAttachChat(chat) {
+        const candidates = evaluations.filter((item) => item.employee_id === chat.employee_id);
+        if (!candidates.length) throw new Error("No evaluation found for this employee.");
+        const preferred = candidates.find((item) => item.process_id === chat.process_id) || candidates[0];
+        const matched = chat.status !== "archived" ? chat : null;
+        const next = attachmentState("auto_attach", Boolean(matched));
+        const attachmentId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        const attachment = {
+          id: attachmentId,
+          pd_chat_log_id: matched?.id || null,
+          process_id: preferred.process_id || chat.process_id || null,
+          employee_id: preferred.employee_id,
+          manager_id: preferred.manager_id || chat.manager_id || null,
+          evaluation_type: preferred.type,
+          evaluation_id: preferred.id,
+          status: next.status,
+          owner_role: next.owner,
+          next_action: next.nextAction,
+          match_strategy: preferred.process_id ? "employee_process_latest_visible" : "employee_latest_visible",
+          attached_by: matched ? currentUser.id : null,
+          attached_at: matched ? now : null,
+          metadata: { source: "page_auto_attach", chatStatus: chat.status, workflowAction: next.workflowAction },
+          updated_at: now,
+        };
+        await supabaseFetch("/rest/v1/pd_chat_evaluation_attachments?on_conflict=evaluation_type,evaluation_id", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify(attachment),
+        });
+        if (matched) {
+          await supabaseFetch(`/rest/v1/pd_chat_logs?id=eq.${chat.id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              evaluation_id: preferred.id,
+              attached_evaluation_type: preferred.type,
+              attached_evaluation_id: preferred.id,
+              attached_at: now,
+              updated_by: currentUser.id,
+              updated_at: now,
+            }),
+          });
+          await supabaseFetch(`/rest/v1/${tableForEvaluation(preferred.type)}?id=eq.${preferred.id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ attached_pd_chat_id: chat.id, updated_at: now }),
+          });
+        }
+        await writeAttachmentAudit(next.action, attachment, next.fromStatus, next.status, {
+          chatId: matched?.id || null,
+          processId: attachment.process_id,
+          managerId: attachment.manager_id,
+          evaluationType: preferred.type,
+          evaluationId: preferred.id,
+          matchStrategy: attachment.match_strategy,
+          owner: next.owner,
+          nextAction: next.nextAction,
+        });
+        showMessage(matched ? "PD Chat attached to evaluation." : "No matching PD Chat found; attachment marked missing.", "success");
+        await loadChats();
+      }
+
+      function tableForEvaluation(type) {
+        return {
+          end_cycle_evaluation: "end_cycle_evaluations",
+          mid_cycle_evaluation: "mid_cycle_evaluations",
+          downward_evaluation: "process_downward_evaluations",
+        }[type];
+      }
+
       document.querySelector("#createForm").addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
           const employee = profiles.find((item) => item.id === document.querySelector("#employeeId").value);
           const managerId = document.querySelector("#managerId").value || employee?.manager_id || null;
           const processId = document.querySelector("#processId").value || null;
+          const evaluation = evaluations.find((item) => item.id === document.querySelector("#evaluationId").value);
           const topic = document.querySelector("#topic").value.trim();
           const body = document.querySelector("#messageText").value.trim();
           if (!employee) throw new Error("Select an employee first.");
@@ -337,6 +479,10 @@
               process_id: processId,
               employee_id: employee.id,
               manager_id: managerId,
+              evaluation_id: evaluation?.id || null,
+              attached_evaluation_type: evaluation?.type || null,
+              attached_evaluation_id: evaluation?.id || null,
+              attached_at: evaluation ? new Date().toISOString() : null,
               status: state.status,
               owner_role: state.owner,
               next_action: state.nextAction,
@@ -351,8 +497,13 @@
             owner: state.owner,
             nextAction: state.nextAction,
             processId,
+            evaluationId: evaluation?.id || null,
+            evaluationType: evaluation?.type || null,
             messageCount: messages.length,
           });
+          if (evaluation) {
+            await autoAttachChat({ id, process_id: processId, employee_id: employee.id, manager_id: managerId, status: state.status });
+          }
           showMessage("PD Chat log created.", "success");
           await loadChats();
         } catch (error) {

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Process Form Instances</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      .grid { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; align-items:end; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:80px; resize:vertical; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.returned,.pill.extended { background:#fff1d6; color:#7a4f00; }
+      .pill.closed { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Process Form Instances</h1>
+          <p>Detail table for participant form instances, locked form versions, and admin movement with required audit reasons.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Process Detail</h2>
+        <div class="grid">
+          <label>Process<select id="processSelect"></select></label>
+          <button id="syncButton" type="button">Sync instances</button>
+          <button class="secondary" id="reloadButton" type="button">Reload table</button>
+        </div>
+        <div id="processMeta" class="muted"></div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Form Instance Table</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Employee</th><th>Locked Form</th><th>State</th><th>Admin movement</th><th>Payload</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let processes = [];
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        assigned:{ status:"assigned", owner:"EMPLOYEE", nextAction:"update" },
+        in_progress:{ status:"in_progress", owner:"EMPLOYEE", nextAction:"submit" },
+        submitted:{ status:"submitted", owner:"MANAGER", nextAction:"approve" },
+        approved:{ status:"approved", owner:"HRBP", nextAction:"close" },
+        returned:{ status:"returned", owner:"EMPLOYEE", nextAction:"update" },
+        closed:{ status:"closed", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      async function writeAudit(action, instance, fromStatus, toStatus, metadata = {}, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:instance.employee_id, action, entity_type:"process_form_instance", entity_id:instance.id, from_status:fromStatus, to_status:toStatus, reason, metadata:{ processId:instance.process_id, formTemplateVersionId:instance.form_template_version_id, lockedFormVersionNumber:instance.locked_form_version_number, ...metadata } }) });
+      }
+      async function loadProcesses() {
+        processes = await supabaseFetch("/rest/v1/performance_processes?select=id,name,status,process_type,form_template_id,locked_form_template_version_id,locked_form_version_number,locked_form_schema,created_by,updated_by&order=updated_at.desc");
+        document.querySelector("#processSelect").innerHTML = processes.map((process) => `<option value="${process.id}">${process.name} · ${process.status}</option>`).join("");
+        renderProcessMeta();
+      }
+      function selectedProcess() {
+        return processes.find((process) => process.id === document.querySelector("#processSelect").value);
+      }
+      function renderProcessMeta() {
+        const process = selectedProcess();
+        document.querySelector("#processMeta").textContent = process ? `Type: ${process.process_type}. Locked version: ${process.locked_form_template_version_id || "not locked"} / v${process.locked_form_version_number || "-"}.` : "No process found.";
+      }
+      async function loadInstances() {
+        const process = selectedProcess();
+        if (!process) return;
+        renderProcessMeta();
+        const instances = await supabaseFetch(`/rest/v1/process_form_instances?process_id=eq.${process.id}&select=*&order=updated_at.desc`);
+        countLabel.textContent = `${instances.length} instance${instances.length === 1 ? "" : "s"}`;
+        rows.innerHTML = instances.map((item) => `<tr>
+          <td><code>${item.employee_id}</code><div class="muted">Manager: ${item.manager_id || "-"}</div></td>
+          <td><code>${item.form_template_version_id}</code><div class="muted">v${item.locked_form_version_number || "-"} locked at process config</div></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+          <td>
+            <div class="muted">${item.admin_move_from_status && item.admin_move_to_status ? `${item.admin_move_from_status} -> ${item.admin_move_to_status}` : "No admin move"}</div>
+            <div class="muted">${item.admin_move_reason || ""}</div>
+          </td>
+          <td><code>${JSON.stringify(item.response_payload || {})}</code></td>
+          <td class="actions">
+            ${["assigned","in_progress","returned"].includes(item.status) ? `<button data-action="update" data-id="${item.id}">Update</button><button data-action="submit" data-id="${item.id}">Submit</button>` : ""}
+            ${item.status === "submitted" ? `<button data-action="approve" data-id="${item.id}">Approve</button><button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+            ${item.status === "approved" ? `<button data-action="close" data-id="${item.id}">Close</button>` : ""}
+            ${item.status !== "closed" ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button>` : ""}
+            <button class="secondary" data-action="admin_move" data-id="${item.id}">Admin move</button>
+          </td>
+        </tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function syncInstances() {
+        const process = selectedProcess();
+        if (!process?.locked_form_template_version_id || !process?.locked_form_schema) throw new Error("Configure/start a process with a locked form version first.");
+        const participants = await supabaseFetch(`/rest/v1/process_participants?process_id=eq.${process.id}&status=neq.excluded&select=id,employee_id,manager_id,status`);
+        if (!participants.length) throw new Error("Processes cannot start when org filters produce zero eligible employees.");
+        const state = stateByStatus.assigned;
+        const payload = participants.map((participant) => ({ process_id:process.id, participant_id:participant.id, employee_id:participant.employee_id, manager_id:participant.manager_id, form_template_id:process.form_template_id, form_template_version_id:process.locked_form_template_version_id, locked_form_version_number:process.locked_form_version_number, locked_form_schema:process.locked_form_schema, status:state.status, owner_role:state.owner, next_action:state.nextAction, created_by:currentUser.id, updated_by:currentUser.id }));
+        const instances = await supabaseFetch("/rest/v1/process_form_instances?select=*", { method:"POST", headers:{ Prefer:"resolution=merge-duplicates,return=representation" }, body:JSON.stringify(payload) });
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, action:"process.form_instances.created", entity_type:"performance_process", entity_id:process.id, from_status:null, to_status:state.status, metadata:{ owner:state.owner, nextAction:state.nextAction, instanceCount:instances.length, lockedFormTemplateVersionId:process.locked_form_template_version_id, lockedFormVersionNumber:process.locked_form_version_number } }) });
+        showMessage("Form instances synced from the locked process form version.", "success");
+        await loadInstances();
+      }
+      async function handleAction(id, action) {
+        const [current] = await supabaseFetch(`/rest/v1/process_form_instances?id=eq.${id}&select=*`);
+        if (!current) throw new Error("Form instance not found");
+        const payload = action === "update" || action === "submit" ? JSON.parse(prompt("Response payload JSON", JSON.stringify(current.response_payload || { example: "answer" })) || "{}") : current.response_payload;
+        if (action === "update") await patchInstance(current, { response_payload:payload }, "process.form_instance.updated", stateByStatus.in_progress);
+        if (action === "submit") await patchInstance(current, { response_payload:payload, submitted_at:new Date().toISOString() }, "process.form_instance.submitted", stateByStatus.submitted);
+        if (action === "approve") await patchInstance(current, { approved_at:new Date().toISOString() }, "process.form_instance.approved", stateByStatus.approved);
+        if (action === "return") await patchInstance(current, { returned_at:new Date().toISOString(), last_return_reason:"Returned from temporary scaffold" }, "process.form_instance.returned", stateByStatus.returned);
+        if (action === "close") await patchInstance(current, { closed_at:new Date().toISOString() }, "process.form_instance.closed", stateByStatus.closed);
+        if (action === "visibility") await patchInstance(current, { visibility:{ employeeCanView:true, managerCanView:true, hrbpCanView:true }, visibility_changed_at:new Date().toISOString() }, "process.form_instance.visibility_changed", stateByStatus[current.status]);
+        if (action === "admin_move") await adminMoveInstance(current);
+        showMessage("Form instance action saved and audit event written.", "success");
+        await loadInstances();
+      }
+      function timestampPatchForStatus(status) {
+        const now = new Date().toISOString();
+        if (status === "submitted") return { submitted_at:now };
+        if (status === "approved") return { approved_at:now };
+        if (status === "returned") return { returned_at:now, last_return_reason:"Moved by admin with audit reason" };
+        if (status === "closed") return { closed_at:now };
+        return {};
+      }
+      async function adminMoveInstance(current) {
+        const allowedStatuses = Object.keys(stateByStatus);
+        const targetStatus = (prompt(`Move to status: ${allowedStatuses.join(", ")}`, current.status) || "").trim();
+        if (!allowedStatuses.includes(targetStatus)) throw new Error("Choose one of: " + allowedStatuses.join(", "));
+        const reason = (prompt("Audit reason for this admin movement", "Correcting workflow owner/status after HR review") || "").trim();
+        if (reason.length < 12) throw new Error("Admin movement needs an audit reason with at least 12 characters.");
+        const state = stateByStatus[targetStatus];
+        await patchInstance(current, {
+          ...timestampPatchForStatus(targetStatus),
+          admin_moved_at:new Date().toISOString(),
+          admin_moved_by:currentUser.id,
+          admin_move_reason:reason,
+          admin_move_from_status:current.status,
+          admin_move_to_status:targetStatus,
+        }, "process.form_instance.admin_moved", state, { reason, fromStatus:current.status, toStatus:targetStatus }, reason);
+      }
+      async function patchInstance(current, patch, auditAction, state, metadata = {}, reason = null) {
+        await supabaseFetch(`/rest/v1/process_form_instances?id=eq.${current.id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ ...patch, status:state.status, owner_role:state.owner, next_action:state.nextAction, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+        await writeAudit(auditAction, current, current.status, state.status, { owner:state.owner, nextAction:state.nextAction, ...metadata }, reason);
+      }
+      document.querySelector("#processSelect").addEventListener("change", () => loadInstances().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#syncButton").addEventListener("click", () => syncInstances().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#reloadButton").addEventListener("click", () => loadInstances().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadProcesses(); await loadInstances(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load form instances"; } })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "@bimebazar/form-versioning-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/formVersioningWorkflow.mjs",
+  "types": "src/formVersioningWorkflow.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/formVersioningWorkflow.mjs",
+      "types": "./src/formVersioningWorkflow.d.ts"
+    }
+  }
+}

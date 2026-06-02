@@ -18,9 +18,27 @@ export declare const pdChatActions: Readonly<{
   ARCHIVE: "archive";
 }>;
 
+export declare const pdChatAttachmentStatuses: Readonly<{
+  MATCHED: "matched";
+  ATTACHED: "attached";
+  MISSING_CHAT: "missing_chat";
+  DETACHED: "detached";
+}>;
+
+export declare const pdChatAttachmentActions: Readonly<{
+  AUTO_ATTACH: "auto_attach";
+  MARK_MISSING: "mark_missing";
+  DETACH: "detach";
+  OVERRIDE_ATTACH: "override_attach";
+}>;
+
 export declare function getPdChatState(status: string): { status: string; owner: string; nextAction: string | null };
 
 export declare function transitionPdChatState(status: string, action: string): { status: string; owner: string; nextAction: string | null };
+
+export declare function getPdChatAttachmentState(status: string): { status: string; owner: string; nextAction: string | null };
+
+export declare function transitionPdChatAttachmentState(status: string, action: string): { status: string; owner: string; nextAction: string | null };
 
 export declare function normalizeChatMessage(input: {
   id: string;
