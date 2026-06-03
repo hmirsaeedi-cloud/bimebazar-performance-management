@@ -28,3 +28,23 @@ export const reportVisibilitySchema = z.object({
 export const reportExportSchema = z.object({
   exportFormat: z.enum(["csv", "xlsx", "pdf", "json"]).default("csv"),
 });
+
+export const listAdvancedAnalyticsQuerySchema = z.object({
+  status: z.enum(["draft", "generated", "submitted", "reviewed", "returned", "visibility_approved", "exported", "archived"]).optional(),
+  cohortKey: z.enum(["businessUnit", "role", "manager"]).optional(),
+});
+
+export const createAdvancedAnalyticsSchema = z.object({
+  title: z.string().min(3).max(180),
+  periodStart: z.string().date().optional().nullable(),
+  periodEnd: z.string().date().optional().nullable(),
+  cohortKey: z.enum(["businessUnit", "role", "manager"]).default("businessUnit"),
+  interval: z.enum(["month", "quarter"]).default("month"),
+  filters: z.record(z.unknown()).default({}),
+});
+
+export const generateAdvancedAnalyticsSchema = z.object({
+  cohortKey: z.enum(["businessUnit", "role", "manager"]).optional(),
+  interval: z.enum(["month", "quarter"]).optional(),
+  filters: z.record(z.unknown()).default({}),
+});

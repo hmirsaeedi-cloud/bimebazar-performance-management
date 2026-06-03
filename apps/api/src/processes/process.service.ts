@@ -10,6 +10,16 @@ import {
   transitionProcessState,
 } from "@bimebazar/process-engine-workflow";
 import {
+  aggregatePulseAnswers,
+  assertPulseSurveyHasEligibleRecipients,
+  evaluateAnonymityGuard,
+  getPulseSurveyState,
+  lockPulseSurveyFormVersion,
+  pulseSurveyActions,
+  pulseSurveyStatuses,
+  transitionPulseSurveyState,
+} from "@bimebazar/pulse-survey-workflow";
+import {
   assertSurveyHasEligibleRecipients,
   getIndividualSurveyState,
   individualSurveyActions,
@@ -32,7 +42,7 @@ import {
   transitionSelfAssessmentState,
 } from "@bimebazar/self-assessment-workflow";
 import { writeAuditEvent } from "../audit/audit.service.js";
-import { notifyDownwardEvaluationChanged, notifyIndividualSurveyChanged, notifyProcessChanged, notifyProcessFormInstanceChanged, notifySelfAssessmentChanged } from "../notifications/notification.service.js";
+import { notifyDownwardEvaluationChanged, notifyIndividualSurveyChanged, notifyProcessChanged, notifyProcessFormInstanceChanged, notifyPulseSurveyChanged, notifySelfAssessmentChanged } from "../notifications/notification.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 import type { AuthUser } from "../auth/auth.types.js";
 
@@ -75,6 +85,18 @@ const individualSurveySelect = `
 const individualSurveyResponseSelect = `
   id,survey_process_id,employee_id,status,owner_role,next_action,answers,submitted_at,approved_at,returned_at,last_return_reason,
   created_by,updated_by,created_at,updated_at
+`;
+
+const pulseSurveySelect = `
+  id,process_id,title,description,status,owner_role,next_action,form_template_id,form_template_version_id,
+  locked_form_template_version_id,target_employee_ids,eligible_employee_count,min_responses,response_count,pulse_settings,
+  aggregate_results,anonymity_guard,visibility,started_at,submitted_at,approved_at,returned_at,released_at,completed_at,
+  cancelled_at,visibility_changed_at,last_return_reason,created_by,updated_by,created_at,updated_at,
+  pulse_survey_responses(id,pulse_survey_id,respondent_code,status,owner_role,next_action,submitted_at,created_at,updated_at)
+`;
+
+const pulseSurveyResponseSelect = `
+  id,pulse_survey_id,respondent_code,status,owner_role,next_action,answers,submitted_at,created_by,updated_by,created_at,updated_at
 `;
 
 type ProcessConfig = {
@@ -315,6 +337,15 @@ export async function listIndividualSurveys(input: { status?: string }) {
   return data ?? [];
 }
 
+export async function listPulseSurveys(input: { status?: string }) {
+  const admin = createSupabaseAdminClient();
+  let query = admin.from("pulse_survey_processes").select(pulseSurveySelect).order("updated_at", { ascending: false });
+  if (input.status) query = query.eq("status", input.status);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 export async function createIndividualSurvey(input: {
   actor: AuthUser;
   title: string;
@@ -359,6 +390,148 @@ export async function createIndividualSurvey(input: {
     lockedFormTemplateVersionId: locked.lockedFormTemplateVersionId,
   });
   await notifyIndividualSurveyChanged(toIndividualSurveyNotification(data, "created"));
+  return data;
+}
+
+export async function createPulseSurvey(input: {
+  actor: AuthUser;
+  title: string;
+  description?: string;
+  formTemplateId?: string | null;
+  formTemplateVersionId: string;
+  targetEmployeeIds: string[];
+  minResponses?: number;
+  pulseSettings?: Record<string, unknown>;
+  visibility?: Record<string, unknown>;
+}) {
+  const admin = createSupabaseAdminClient();
+  assertPulseSurveyHasEligibleRecipients(input.targetEmployeeIds);
+  const locked = lockPulseSurveyFormVersion({ formTemplateVersionId: input.formTemplateVersionId });
+  const version = await getFormVersionSnapshot(input.formTemplateVersionId);
+  if (input.formTemplateId && version.template_id !== input.formTemplateId) {
+    throw new Error("Selected form version does not belong to the selected form template");
+  }
+  const state = getPulseSurveyState(pulseSurveyStatuses.DRAFT);
+  const minResponses = input.minResponses ?? 3;
+  const guard = evaluateAnonymityGuard({ responseCount: 0, minResponses });
+  const { data, error } = await admin
+    .from("pulse_survey_processes")
+    .insert({
+      title: input.title,
+      description: input.description ?? null,
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      form_template_id: input.formTemplateId ?? version.template_id,
+      form_template_version_id: locked.formTemplateVersionId,
+      locked_form_template_version_id: locked.lockedFormTemplateVersionId,
+      target_employee_ids: input.targetEmployeeIds,
+      eligible_employee_count: input.targetEmployeeIds.length,
+      min_responses: minResponses,
+      response_count: 0,
+      pulse_settings: { anonymous: true, ...(input.pulseSettings ?? {}) },
+      aggregate_results: {},
+      anonymity_guard: guard,
+      visibility: input.visibility ?? {},
+      created_by: input.actor.id,
+      updated_by: input.actor.id,
+    })
+    .select(pulseSurveySelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditPulseSurvey(input.actor, data, "process.pulse.created", null, state, {
+    eligibleEmployeeCount: input.targetEmployeeIds.length,
+    minResponses,
+    lockedFormTemplateVersionId: locked.lockedFormTemplateVersionId,
+  });
+  await notifyPulseSurveyChanged(toPulseSurveyNotification(data, "created"));
+  return data;
+}
+
+export async function updatePulseSurvey(input: {
+  actor: AuthUser;
+  id: string;
+  patch: Partial<{
+    title: string;
+    description: string;
+    formTemplateId: string | null;
+    formTemplateVersionId: string;
+    targetEmployeeIds: string[];
+    minResponses: number;
+    pulseSettings: Record<string, unknown>;
+    visibility: Record<string, unknown>;
+  }>;
+}) {
+  const current = await getPulseSurvey(input.id);
+  if (![pulseSurveyStatuses.DRAFT, pulseSurveyStatuses.CONFIGURED, pulseSurveyStatuses.RETURNED, pulseSurveyStatuses.VISIBILITY_CHANGED].includes(current.status)) {
+    throw new Error("Only draft, configured, returned, or visibility-changed pulse surveys can be updated");
+  }
+  const state = transitionPulseSurveyState(current.status, pulseSurveyActions.UPDATE);
+  const dbPatch: Record<string, unknown> = {
+    status: state.status,
+    owner_role: state.owner,
+    next_action: state.nextAction,
+    updated_by: input.actor.id,
+    updated_at: new Date().toISOString(),
+  };
+  if ("title" in input.patch) dbPatch.title = input.patch.title;
+  if ("description" in input.patch) dbPatch.description = input.patch.description ?? null;
+  if ("pulseSettings" in input.patch) dbPatch.pulse_settings = { anonymous: true, ...(input.patch.pulseSettings ?? {}) };
+  if ("visibility" in input.patch) dbPatch.visibility = input.patch.visibility ?? {};
+  if ("minResponses" in input.patch && input.patch.minResponses) {
+    dbPatch.min_responses = input.patch.minResponses;
+    dbPatch.anonymity_guard = evaluateAnonymityGuard({ responseCount: current.response_count ?? 0, minResponses: input.patch.minResponses });
+  }
+  if ("targetEmployeeIds" in input.patch) {
+    assertPulseSurveyHasEligibleRecipients(input.patch.targetEmployeeIds ?? []);
+    dbPatch.target_employee_ids = input.patch.targetEmployeeIds;
+    dbPatch.eligible_employee_count = input.patch.targetEmployeeIds?.length ?? 0;
+  }
+  if ("formTemplateVersionId" in input.patch && input.patch.formTemplateVersionId) {
+    const locked = lockPulseSurveyFormVersion({ formTemplateVersionId: input.patch.formTemplateVersionId });
+    const version = await getFormVersionSnapshot(input.patch.formTemplateVersionId);
+    if (input.patch.formTemplateId && version.template_id !== input.patch.formTemplateId) {
+      throw new Error("Selected form version does not belong to the selected form template");
+    }
+    dbPatch.form_template_id = input.patch.formTemplateId ?? version.template_id;
+    dbPatch.form_template_version_id = locked.formTemplateVersionId;
+    dbPatch.locked_form_template_version_id = locked.lockedFormTemplateVersionId;
+  }
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("pulse_survey_processes").update(dbPatch).eq("id", input.id).select(pulseSurveySelect).single();
+  if (error) throw new Error(error.message);
+  await auditPulseSurvey(input.actor, data, "process.pulse.updated", current.status, state, {
+    visibilityChanged: "visibility" in input.patch,
+    changedFields: Object.keys(input.patch),
+  });
+  if ("visibility" in input.patch) {
+    await auditPulseSurvey(input.actor, data, "process.pulse.visibility_changed", current.status, state, { from: current.visibility, to: data.visibility });
+  }
+  await notifyPulseSurveyChanged(toPulseSurveyNotification(data, "updated"));
+  return data;
+}
+
+export async function startPulseSurvey(input: { actor: AuthUser; id: string }) {
+  const current = await getPulseSurvey(input.id);
+  assertPulseSurveyHasEligibleRecipients(current.target_employee_ids);
+  const state = transitionPulseSurveyState(current.status, current.status === pulseSurveyStatuses.DRAFT ? pulseSurveyActions.CONFIGURE : pulseSurveyActions.START);
+  const startState = state.status === pulseSurveyStatuses.CONFIGURED
+    ? transitionPulseSurveyState(state.status, pulseSurveyActions.START)
+    : state;
+  const now = new Date().toISOString();
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("pulse_survey_processes")
+    .update({ status: startState.status, owner_role: startState.owner, next_action: startState.nextAction, started_at: now, updated_by: input.actor.id, updated_at: now })
+    .eq("id", input.id)
+    .select(pulseSurveySelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditPulseSurvey(input.actor, data, "process.pulse.started", current.status, startState, {
+    eligibleEmployeeCount: current.eligible_employee_count,
+    lockedFormTemplateVersionId: current.locked_form_template_version_id,
+  });
+  await notifyPulseSurveyChanged(toPulseSurveyNotification(data, "started"));
   return data;
 }
 
@@ -1028,6 +1201,152 @@ export async function updateIndividualSurveyVisibility(input: { actor: AuthUser;
   return data;
 }
 
+export async function submitPulseSurveyResponse(input: { actor: AuthUser; id: string; respondentCode: string; answers: Record<string, unknown> }) {
+  const survey = await getPulseSurvey(input.id);
+  if (![pulseSurveyStatuses.ACTIVE, pulseSurveyStatuses.ANONYMITY_REVIEW, pulseSurveyStatuses.RETURNED].includes(survey.status)) {
+    throw new Error("Pulse survey responses can be submitted only while the survey is active or returned");
+  }
+  const responseState = { status: "submitted", owner: "HRBP", nextAction: "approve" };
+  const respondentCode = await hashRespondentCode(`${input.id}:${input.respondentCode}`);
+  const now = new Date().toISOString();
+  const admin = createSupabaseAdminClient();
+  const { data: response, error: responseError } = await admin
+    .from("pulse_survey_responses")
+    .upsert({
+      pulse_survey_id: input.id,
+      respondent_code: respondentCode,
+      status: responseState.status,
+      owner_role: responseState.owner,
+      next_action: responseState.nextAction,
+      answers: input.answers,
+      submitted_at: now,
+      created_by: input.actor.id,
+      updated_by: input.actor.id,
+      updated_at: now,
+    }, { onConflict: "pulse_survey_id,respondent_code" })
+    .select(pulseSurveyResponseSelect)
+    .single();
+  if (responseError) throw new Error(responseError.message);
+
+  const { data: responses, error: responsesError } = await admin
+    .from("pulse_survey_responses")
+    .select("answers")
+    .eq("pulse_survey_id", input.id)
+    .eq("status", "submitted");
+  if (responsesError) throw new Error(responsesError.message);
+  const responseCount = responses?.length ?? 0;
+  const guard = evaluateAnonymityGuard({ responseCount, minResponses: survey.min_responses });
+  const state = survey.status === pulseSurveyStatuses.ANONYMITY_REVIEW
+    ? getPulseSurveyState(survey.status)
+    : transitionPulseSurveyState(survey.status, pulseSurveyActions.SUBMIT);
+  const aggregateResults = guard.canRelease ? aggregatePulseAnswers(responses ?? []) : {};
+  const { data, error } = await admin
+    .from("pulse_survey_processes")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      response_count: responseCount,
+      aggregate_results: aggregateResults,
+      anonymity_guard: guard,
+      submitted_at: now,
+      updated_by: input.actor.id,
+      updated_at: now,
+    })
+    .eq("id", input.id)
+    .select(pulseSurveySelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditPulseSurvey(input.actor, data, "process.pulse.submitted", survey.status, state, {
+    responseCount,
+    minResponses: survey.min_responses,
+    canRelease: guard.canRelease,
+  });
+  await auditPulseSurveyResponse(input.actor, response, "process.pulse.response_submitted", null, responseState, {
+    answerKeys: Object.keys(input.answers),
+  });
+  await notifyPulseSurveyChanged(toPulseSurveyNotification(data, "submitted"));
+  return { survey: data, response };
+}
+
+export async function approvePulseSurvey(input: { actor: AuthUser; id: string }) {
+  const current = await getPulseSurvey(input.id);
+  const guard = evaluateAnonymityGuard({ responseCount: current.response_count ?? 0, minResponses: current.min_responses });
+  if (!guard.canRelease) {
+    throw new Error(`Pulse survey cannot be approved for release until ${guard.minResponses} anonymous responses exist`);
+  }
+  return movePulseSurvey(input.actor, input.id, pulseSurveyActions.APPROVE, "process.pulse.approved", "approved", {
+    approved_at: new Date().toISOString(),
+    anonymity_guard: guard,
+  });
+}
+
+export async function releasePulseSurvey(input: { actor: AuthUser; id: string }) {
+  const current = await getPulseSurvey(input.id);
+  const admin = createSupabaseAdminClient();
+  const { data: responses, error: responsesError } = await admin
+    .from("pulse_survey_responses")
+    .select("answers")
+    .eq("pulse_survey_id", input.id)
+    .eq("status", "submitted");
+  if (responsesError) throw new Error(responsesError.message);
+  const guard = evaluateAnonymityGuard({ responseCount: responses?.length ?? 0, minResponses: current.min_responses });
+  if (!guard.canRelease) {
+    throw new Error(`Pulse survey cannot release aggregates until ${guard.minResponses} anonymous responses exist`);
+  }
+  return movePulseSurvey(input.actor, input.id, pulseSurveyActions.RELEASE_RESULTS, "process.pulse.released", "released", {
+    released_at: new Date().toISOString(),
+    aggregate_results: aggregatePulseAnswers(responses ?? []),
+    response_count: responses?.length ?? 0,
+    anonymity_guard: guard,
+  });
+}
+
+export async function returnPulseSurvey(input: { actor: AuthUser; id: string; reason: string }) {
+  return movePulseSurvey(input.actor, input.id, pulseSurveyActions.RETURN, "process.pulse.returned", "returned", {
+    returned_at: new Date().toISOString(),
+    last_return_reason: input.reason,
+    reason: input.reason,
+  });
+}
+
+export async function completePulseSurvey(input: { actor: AuthUser; id: string }) {
+  return movePulseSurvey(input.actor, input.id, pulseSurveyActions.COMPLETE, "process.pulse.completed", "completed", {
+    completed_at: new Date().toISOString(),
+  });
+}
+
+export async function cancelPulseSurvey(input: { actor: AuthUser; id: string; reason?: string }) {
+  return movePulseSurvey(input.actor, input.id, pulseSurveyActions.CANCEL, "process.pulse.cancelled", "cancelled", {
+    cancelled_at: new Date().toISOString(),
+    reason: input.reason,
+  });
+}
+
+export async function updatePulseSurveyVisibility(input: { actor: AuthUser; id: string; visibility: Record<string, unknown> }) {
+  const current = await getPulseSurvey(input.id);
+  const state = transitionPulseSurveyState(current.status, pulseSurveyActions.OVERRIDE_VISIBILITY);
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("pulse_survey_processes")
+    .update({
+      visibility: input.visibility,
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      visibility_changed_at: new Date().toISOString(),
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(pulseSurveySelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditPulseSurvey(input.actor, data, "process.pulse.visibility_changed", current.status, state, { from: current.visibility, to: data.visibility });
+  await notifyPulseSurveyChanged(toPulseSurveyNotification(data, "visibility_changed"));
+  return data;
+}
+
 const actionMap = {
   schedule: processActions.SCHEDULE,
   start: processActions.START,
@@ -1138,6 +1457,13 @@ async function getIndividualSurvey(id: string) {
 async function getIndividualSurveyResponse(id: string) {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.from("individual_survey_responses").select(individualSurveyResponseSelect).eq("id", id).single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function getPulseSurvey(id: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("pulse_survey_processes").select(pulseSurveySelect).eq("id", id).single();
   if (error) throw new Error(error.message);
   return data;
 }
@@ -1346,6 +1672,37 @@ async function moveIndividualSurveyResponse(
   return data;
 }
 
+async function movePulseSurvey(
+  actor: AuthUser,
+  id: string,
+  workflowAction: Parameters<typeof transitionPulseSurveyState>[1],
+  auditAction: string,
+  notificationAction: "approved" | "returned" | "released" | "completed" | "cancelled",
+  extraPatch: Record<string, unknown>,
+) {
+  const current = await getPulseSurvey(id);
+  const state = transitionPulseSurveyState(current.status, workflowAction);
+  const { reason, ...dbExtraPatch } = extraPatch;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("pulse_survey_processes")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      ...dbExtraPatch,
+      updated_by: actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select(pulseSurveySelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditPulseSurvey(actor, data, auditAction, current.status, state, { reason });
+  await notifyPulseSurveyChanged(toPulseSurveyNotification(data, notificationAction));
+  return data;
+}
+
 async function auditSelfAssessment(
   actor: AuthUser,
   selfAssessment: { id: string; process_id: string; employee_id: string },
@@ -1525,6 +1882,70 @@ async function auditIndividualSurveyResponse(
   });
 }
 
+async function auditPulseSurvey(
+  actor: AuthUser,
+  survey: {
+    id: string;
+    target_employee_ids?: string[];
+    form_template_version_id: string;
+    locked_form_template_version_id: string;
+    eligible_employee_count?: number;
+    min_responses?: number;
+    response_count?: number;
+    anonymity_guard?: Record<string, unknown>;
+  },
+  action: string,
+  fromStatus: string | null,
+  state: { status: string; owner: string; nextAction: string | null },
+  metadata: Record<string, unknown>,
+) {
+  await writeAuditEvent({
+    actorUserId: actor.id,
+    action,
+    entityType: "pulse_survey_process",
+    entityId: survey.id,
+    fromStatus,
+    toStatus: state.status,
+    reason: typeof metadata.reason === "string" ? metadata.reason : undefined,
+    metadata: {
+      owner: state.owner,
+      nextAction: state.nextAction,
+      formTemplateVersionId: survey.form_template_version_id,
+      lockedFormTemplateVersionId: survey.locked_form_template_version_id,
+      eligibleEmployeeCount: survey.eligible_employee_count ?? survey.target_employee_ids?.length ?? 0,
+      minResponses: survey.min_responses,
+      responseCount: survey.response_count,
+      anonymityGuard: survey.anonymity_guard,
+      ...metadata,
+    },
+  });
+}
+
+async function auditPulseSurveyResponse(
+  actor: AuthUser,
+  response: { id: string; pulse_survey_id: string; respondent_code: string },
+  action: string,
+  fromStatus: string | null,
+  state: { status: string; owner: string; nextAction: string | null },
+  metadata: Record<string, unknown>,
+) {
+  await writeAuditEvent({
+    actorUserId: actor.id,
+    action,
+    entityType: "pulse_survey_response",
+    entityId: response.id,
+    fromStatus,
+    toStatus: state.status,
+    metadata: {
+      pulseSurveyId: response.pulse_survey_id,
+      respondentCodeHash: response.respondent_code,
+      owner: state.owner,
+      nextAction: state.nextAction,
+      ...metadata,
+    },
+  });
+}
+
 function toIndividualSurveyNotification(
   survey: { id: string; status: string; owner_role: string; next_action: string | null; eligible_employee_count?: number },
   action: Parameters<typeof notifyIndividualSurveyChanged>[0]["action"],
@@ -1552,6 +1973,38 @@ function toIndividualSurveyResponseNotification(
     nextAction: response.next_action,
     action,
   };
+}
+
+function toPulseSurveyNotification(
+  survey: {
+    id: string;
+    status: string;
+    owner_role: string;
+    next_action: string | null;
+    eligible_employee_count?: number;
+    response_count?: number;
+    min_responses?: number;
+    anonymity_guard?: { canRelease?: boolean } | null;
+  },
+  action: Parameters<typeof notifyPulseSurveyChanged>[0]["action"],
+) {
+  return {
+    pulseSurveyId: survey.id,
+    status: survey.status,
+    owner: survey.owner_role,
+    nextAction: survey.next_action,
+    action,
+    eligibleEmployeeCount: survey.eligible_employee_count,
+    responseCount: survey.response_count,
+    minResponses: survey.min_responses,
+    canRelease: survey.anonymity_guard?.canRelease,
+  };
+}
+
+async function hashRespondentCode(value: string) {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function auditProcess(

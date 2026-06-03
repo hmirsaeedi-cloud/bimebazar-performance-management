@@ -1,4 +1,11 @@
 import {
+  conditionalLogicActions,
+  conditionalLogicStatuses,
+  evaluateConditionalRules,
+  getConditionalLogicState,
+  transitionConditionalLogicState,
+} from "@bimebazar/form-conditional-logic-workflow";
+import {
   formBuilderActions,
   formBuilderStatuses,
   getFormBuilderState,
@@ -14,7 +21,7 @@ import {
 import { writeAuditEvent } from "../audit/audit.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 import type { AuthUser } from "../auth/auth.types.js";
-import { notifyFormTemplateChanged } from "../notifications/notification.service.js";
+import { notifyFormConditionalLogicChanged, notifyFormTemplateChanged } from "../notifications/notification.service.js";
 import { formTemplatePresets, type FormPresetKey } from "./form.presets.js";
 
 const templateSelect = `
@@ -28,6 +35,12 @@ const versionSelect = `
   id,template_id,parent_version_id,version_number,status,version_status,version_owner_role,version_next_action,
   schema,change_summary,visibility_policy,submitted_at,approved_at,returned_at,archived_at,visibility_changed_at,
   last_return_reason,created_by,published_by,created_at,published_at
+`;
+
+const conditionalLogicSelect = `
+  id,form_template_id,form_template_version_id,status,owner_role,next_action,name,description,rules,preview_result,
+  visibility,submitted_at,approved_at,activated_at,returned_at,visibility_changed_at,archived_at,last_return_reason,
+  created_by,updated_by,created_at,updated_at
 `;
 
 interface FormTemplateInput {
@@ -82,6 +95,156 @@ export async function listFormVersionEdits(input: { templateId: string }) {
     .order("version_number", { ascending: false });
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+export async function listConditionalLogic(input: { formTemplateId?: string; formTemplateVersionId?: string; status?: string }) {
+  const admin = createSupabaseAdminClient();
+  let query = admin.from("form_conditional_logic_rules").select(conditionalLogicSelect).order("updated_at", { ascending: false });
+  if (input.formTemplateId) query = query.eq("form_template_id", input.formTemplateId);
+  if (input.formTemplateVersionId) query = query.eq("form_template_version_id", input.formTemplateVersionId);
+  if (input.status) query = query.eq("status", input.status);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function createConditionalLogic(input: {
+  actor: AuthUser;
+  formTemplateId: string;
+  formTemplateVersionId: string;
+  name: string;
+  description?: string;
+  rules: unknown[];
+  visibility: Record<string, unknown>;
+}) {
+  const version = await getFormVersion(input.formTemplateVersionId);
+  assertVersionBelongsToTemplate(version, input.formTemplateId);
+  const admin = createSupabaseAdminClient();
+  const state = getConditionalLogicState(conditionalLogicStatuses.DRAFT);
+  const previewResult = evaluateConditionalRules(input.rules);
+  const { data, error } = await admin
+    .from("form_conditional_logic_rules")
+    .insert({
+      form_template_id: input.formTemplateId,
+      form_template_version_id: input.formTemplateVersionId,
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      name: input.name,
+      description: input.description ?? null,
+      rules: input.rules,
+      preview_result: previewResult,
+      visibility: input.visibility,
+      created_by: input.actor.id,
+      updated_by: input.actor.id,
+    })
+    .select(conditionalLogicSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditConditionalLogic(input.actor, data, "form_conditional_logic.created", null, state, { ruleCount: input.rules.length });
+  await notifyConditionalLogic(data, state, "created");
+  return data;
+}
+
+export async function updateConditionalLogic(input: {
+  actor: AuthUser;
+  id: string;
+  patch: { name?: string; description?: string | null; rules?: unknown[] };
+}) {
+  const current = await getConditionalLogic(input.id);
+  const state = transitionConditionalLogicState(current.status, conditionalLogicActions.UPDATE);
+  const rules = input.patch.rules ?? current.rules ?? [];
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("form_conditional_logic_rules")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      name: input.patch.name ?? current.name,
+      description: "description" in input.patch ? input.patch.description : current.description,
+      rules,
+      preview_result: evaluateConditionalRules(rules),
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(conditionalLogicSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditConditionalLogic(input.actor, data, "form_conditional_logic.updated", current.status, state, { ruleCount: rules.length });
+  await notifyConditionalLogic(data, state, "updated");
+  return data;
+}
+
+export async function submitConditionalLogic(input: { actor: AuthUser; id: string }) {
+  return moveConditionalLogic(input.actor, input.id, conditionalLogicActions.SUBMIT, "form_conditional_logic.submitted", {
+    submitted_at: new Date().toISOString(),
+  });
+}
+
+export async function approveConditionalLogic(input: { actor: AuthUser; id: string }) {
+  return moveConditionalLogic(input.actor, input.id, conditionalLogicActions.APPROVE, "form_conditional_logic.approved", {
+    approved_at: new Date().toISOString(),
+  });
+}
+
+export async function activateConditionalLogic(input: { actor: AuthUser; id: string }) {
+  return moveConditionalLogic(input.actor, input.id, conditionalLogicActions.ACTIVATE, "form_conditional_logic.activated", {
+    activated_at: new Date().toISOString(),
+  });
+}
+
+export async function returnConditionalLogic(input: { actor: AuthUser; id: string; reason: string }) {
+  return moveConditionalLogic(input.actor, input.id, conditionalLogicActions.RETURN, "form_conditional_logic.returned", {
+    returned_at: new Date().toISOString(),
+    last_return_reason: input.reason,
+    reason: input.reason,
+  });
+}
+
+export async function updateConditionalLogicVisibility(input: {
+  actor: AuthUser;
+  id: string;
+  visibility: Record<string, unknown>;
+  reason: string;
+}) {
+  const current = await getConditionalLogic(input.id);
+  const state = transitionConditionalLogicState(current.status, conditionalLogicActions.OVERRIDE_VISIBILITY);
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("form_conditional_logic_rules")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      visibility: input.visibility,
+      visibility_changed_at: new Date().toISOString(),
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(conditionalLogicSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditConditionalLogic(input.actor, data, "form_conditional_logic.visibility_changed", current.status, state, {
+    reason: input.reason,
+    from: current.visibility,
+    to: input.visibility,
+  });
+  await notifyConditionalLogic(data, state, "visibility_changed");
+  return data;
+}
+
+export async function archiveConditionalLogic(input: { actor: AuthUser; id: string }) {
+  return moveConditionalLogic(input.actor, input.id, conditionalLogicActions.ARCHIVE, "form_conditional_logic.archived", {
+    archived_at: new Date().toISOString(),
+  });
+}
+
+export async function previewConditionalLogic(input: { id: string; answers: Record<string, unknown> }) {
+  const current = await getConditionalLogic(input.id);
+  return evaluateConditionalRules(current.rules ?? [], input.answers);
 }
 
 export async function createFormTemplate(input: FormTemplateInput) {
@@ -674,6 +837,13 @@ async function getFormVersion(versionId: string) {
   return data;
 }
 
+async function getConditionalLogic(id: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("form_conditional_logic_rules").select(conditionalLogicSelect).eq("id", id).single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 function assertVersionBelongsToTemplate(version: { template_id: string }, templateId: string) {
   if (version.template_id !== templateId) throw new Error("Form version does not belong to this template");
 }
@@ -734,6 +904,103 @@ async function auditFormVersion(
       ...metadata,
     },
   });
+}
+
+async function moveConditionalLogic(
+  actor: AuthUser,
+  id: string,
+  action: string,
+  auditAction: string,
+  patch: Record<string, unknown>,
+) {
+  const current = await getConditionalLogic(id);
+  const state = transitionConditionalLogicState(current.status, action);
+  const { reason, ...dbPatch } = patch;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("form_conditional_logic_rules")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      updated_by: actor.id,
+      updated_at: new Date().toISOString(),
+      ...dbPatch,
+    })
+    .eq("id", id)
+    .select(conditionalLogicSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditConditionalLogic(actor, data, auditAction, current.status, state, {
+    reason: typeof reason === "string" ? reason : undefined,
+    ruleCount: Array.isArray(data.rules) ? data.rules.length : 0,
+  });
+  await notifyConditionalLogic(data, state, actionNameFromAudit(auditAction));
+  return data;
+}
+
+async function auditConditionalLogic(
+  actor: AuthUser,
+  item: {
+    id: string;
+    form_template_id: string;
+    form_template_version_id: string;
+    rules?: unknown[] | null;
+  },
+  action: string,
+  fromStatus: string | null,
+  state: { status: string; owner: string; nextAction: string | null },
+  metadata: Record<string, unknown> = {},
+) {
+  await writeAuditEvent({
+    actorUserId: actor.id,
+    action,
+    entityType: "form_conditional_logic",
+    entityId: item.id,
+    fromStatus,
+    toStatus: state.status,
+    reason: typeof metadata.reason === "string" ? metadata.reason : undefined,
+    metadata: {
+      formTemplateId: item.form_template_id,
+      formTemplateVersionId: item.form_template_version_id,
+      owner: state.owner,
+      nextAction: state.nextAction,
+      ruleCount: Array.isArray(item.rules) ? item.rules.length : 0,
+      ...metadata,
+    },
+  });
+}
+
+async function notifyConditionalLogic(
+  item: {
+    id: string;
+    form_template_id: string;
+    form_template_version_id: string;
+    status: string;
+    rules?: unknown[] | null;
+  },
+  state: { owner: string; nextAction: string | null },
+  action: "created" | "updated" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "archived",
+) {
+  await notifyFormConditionalLogicChanged({
+    conditionalLogicId: item.id,
+    formTemplateId: item.form_template_id,
+    formTemplateVersionId: item.form_template_version_id,
+    status: item.status,
+    owner: state.owner,
+    nextAction: state.nextAction,
+    action,
+    ruleCount: Array.isArray(item.rules) ? item.rules.length : 0,
+  });
+}
+
+function actionNameFromAudit(auditAction: string) {
+  if (auditAction.endsWith(".submitted")) return "submitted";
+  if (auditAction.endsWith(".approved")) return "approved";
+  if (auditAction.endsWith(".activated")) return "activated";
+  if (auditAction.endsWith(".returned")) return "returned";
+  if (auditAction.endsWith(".archived")) return "archived";
+  return "updated";
 }
 
 function defaultVersionVisibility() {

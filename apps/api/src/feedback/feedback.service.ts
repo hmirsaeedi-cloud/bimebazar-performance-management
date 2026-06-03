@@ -8,16 +8,30 @@ import {
   normalizeFeedbackQuestion,
   transitionFeedbackState,
 } from "@bimebazar/feedback-workflow";
+import {
+  assertKudosRecipientsActive,
+  getKudosFeedState,
+  kudosFeedActions,
+  kudosFeedStatuses,
+  normalizeKudosMessage,
+  transitionKudosFeedState,
+} from "@bimebazar/kudos-feed-workflow";
 import { randomUUID } from "node:crypto";
 import { writeAuditEvent } from "../audit/audit.service.js";
 import type { AuthUser } from "../auth/auth.types.js";
-import { notifyFeedbackChanged } from "../notifications/notification.service.js";
+import { notifyFeedbackChanged, notifyKudosFeedChanged } from "../notifications/notification.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 
 const requestSelect = `
   id,requester_user_id,subject_user_id,status,owner_role,next_action,title,question,is_anonymous,visibility,
   due_at,extended_until,response_count,min_response_count,anonymity_status,anonymity_checked_at,responses_released_at,
   min_response_guard_reason,closed_reason,created_by,updated_by,submitted_at,visibility_changed_at,closed_at,created_at,updated_at
+`;
+
+const kudosSelect = `
+  id,author_user_id,recipient_user_ids,status,owner_role,next_action,title,message,tags,visibility,
+  submitted_at,approved_at,published_at,returned_at,visibility_changed_at,archived_at,last_return_reason,
+  created_by,updated_by,created_at,updated_at
 `;
 
 export async function listActiveFeedbackRecipients() {
@@ -56,6 +70,27 @@ export async function listFeedbackRequests(input: {
     if (error) throw new Error(error.message);
     query = query.in("id", (recipientRows ?? []).map((row) => row.feedback_request_id));
   }
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function listKudosFeed(input: {
+  actor: AuthUser;
+  status?: string;
+  recipientUserId?: string;
+  authorUserId?: string;
+  tag?: string;
+}) {
+  const admin = createSupabaseAdminClient();
+  let query = admin.from("kudos_feed_items").select(kudosSelect).order("updated_at", { ascending: false });
+  if (!input.actor.roles.includes("HR_ADMIN") && !input.actor.roles.includes("HRBP")) {
+    query = query.or(`author_user_id.eq.${input.actor.id},recipient_user_ids.cs.{${input.actor.id}},status.eq.published`);
+  }
+  if (input.status) query = query.eq("status", input.status);
+  if (input.authorUserId) query = query.eq("author_user_id", input.authorUserId);
+  if (input.recipientUserId) query = query.contains("recipient_user_ids", [input.recipientUserId]);
+  if (input.tag) query = query.contains("tags", [input.tag]);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data ?? [];
@@ -105,6 +140,118 @@ export async function createFeedbackRequest(input: {
   await auditFeedback(input.actor, data, "feedback.created", null, state);
   await notifyFeedbackChanged(toFeedbackNotification(data, "created"));
   return data;
+}
+
+export async function createKudos(input: {
+  actor: AuthUser;
+  recipientUserIds: string[];
+  title: string;
+  message: string;
+  tags?: string[];
+  visibility?: Record<string, unknown>;
+}) {
+  assertKudosRecipientsActive(input.recipientUserIds);
+  await assertRecipientsActive(input.recipientUserIds);
+  const admin = createSupabaseAdminClient();
+  const state = getKudosFeedState(kudosFeedStatuses.DRAFT);
+  const { data, error } = await admin
+    .from("kudos_feed_items")
+    .insert({
+      author_user_id: input.actor.id,
+      recipient_user_ids: [...new Set(input.recipientUserIds)],
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      title: input.title.trim(),
+      message: normalizeKudosMessage(input.message),
+      tags: input.tags ?? [],
+      visibility: input.visibility ?? { feedCanView: true, recipientCanView: true, managerCanView: true, hrbpCanView: true },
+      created_by: input.actor.id,
+      updated_by: input.actor.id,
+    })
+    .select(kudosSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditKudos(input.actor, data, "feedback.kudos.created", null, state);
+  await notifyKudosFeedChanged(toKudosNotification(data, "created"));
+  return data;
+}
+
+export async function updateKudos(input: {
+  actor: AuthUser;
+  id: string;
+  recipientUserIds?: string[];
+  title?: string;
+  message?: string;
+  tags?: string[];
+  visibility?: Record<string, unknown>;
+}) {
+  const current = await getKudos(input.id);
+  const state = transitionKudosFeedState(current.status, kudosFeedActions.UPDATE);
+  const patch: Record<string, unknown> = {
+    status: state.status,
+    owner_role: state.owner,
+    next_action: state.nextAction,
+    updated_by: input.actor.id,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.recipientUserIds) {
+    assertKudosRecipientsActive(input.recipientUserIds);
+    await assertRecipientsActive(input.recipientUserIds);
+    patch.recipient_user_ids = [...new Set(input.recipientUserIds)];
+  }
+  if (input.title) patch.title = input.title.trim();
+  if (input.message) patch.message = normalizeKudosMessage(input.message);
+  if (input.tags) patch.tags = input.tags;
+  if (input.visibility) patch.visibility = input.visibility;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("kudos_feed_items").update(patch).eq("id", input.id).select(kudosSelect).single();
+  if (error) throw new Error(error.message);
+  await auditKudos(input.actor, data, "feedback.kudos.updated", current.status, state, { changedFields: Object.keys(input).filter((key) => !["actor", "id"].includes(key)) });
+  if (input.visibility) {
+    await auditKudos(input.actor, data, "feedback.kudos.visibility_changed", current.status, state, { from: current.visibility, to: data.visibility });
+  }
+  await notifyKudosFeedChanged(toKudosNotification(data, "updated"));
+  return data;
+}
+
+export async function submitKudos(input: { actor: AuthUser; id: string }) {
+  return moveKudos(input.actor, input.id, kudosFeedActions.SUBMIT, "feedback.kudos.submitted", "submitted", {
+    submitted_at: new Date().toISOString(),
+  });
+}
+
+export async function approveKudos(input: { actor: AuthUser; id: string }) {
+  return moveKudos(input.actor, input.id, kudosFeedActions.APPROVE, "feedback.kudos.approved", "approved", {
+    approved_at: new Date().toISOString(),
+  });
+}
+
+export async function publishKudos(input: { actor: AuthUser; id: string }) {
+  return moveKudos(input.actor, input.id, kudosFeedActions.PUBLISH, "feedback.kudos.published", "published", {
+    published_at: new Date().toISOString(),
+  });
+}
+
+export async function returnKudos(input: { actor: AuthUser; id: string; reason: string }) {
+  return moveKudos(input.actor, input.id, kudosFeedActions.RETURN, "feedback.kudos.returned", "returned", {
+    returned_at: new Date().toISOString(),
+    last_return_reason: input.reason,
+    reason: input.reason,
+  });
+}
+
+export async function updateKudosVisibility(input: { actor: AuthUser; id: string; visibility: Record<string, unknown> }) {
+  return moveKudos(input.actor, input.id, kudosFeedActions.OVERRIDE_VISIBILITY, "feedback.kudos.visibility_changed", "visibility_changed", {
+    visibility: input.visibility,
+    visibility_changed_at: new Date().toISOString(),
+  });
+}
+
+export async function archiveKudos(input: { actor: AuthUser; id: string }) {
+  return moveKudos(input.actor, input.id, kudosFeedActions.ARCHIVE, "feedback.kudos.archived", "archived", {
+    archived_at: new Date().toISOString(),
+  });
 }
 
 export async function updateFeedbackRequest(input: {
@@ -307,6 +454,44 @@ async function getFeedbackRequest(id: string) {
   return data;
 }
 
+async function getKudos(id: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("kudos_feed_items").select(kudosSelect).eq("id", id).single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function moveKudos(
+  actor: AuthUser,
+  id: string,
+  workflowAction: string,
+  auditAction: string,
+  notificationAction: Parameters<typeof notifyKudosFeedChanged>[0]["action"],
+  patch: Record<string, unknown>,
+) {
+  const current = await getKudos(id);
+  const state = transitionKudosFeedState(current.status, workflowAction);
+  const { reason, ...dbPatch } = patch;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("kudos_feed_items")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      ...dbPatch,
+      updated_by: actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select(kudosSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditKudos(actor, data, auditAction, current.status, state, { reason, visibility: data.visibility });
+  await notifyKudosFeedChanged(toKudosNotification(data, notificationAction));
+  return data;
+}
+
 async function moveFeedback(
   actor: AuthUser,
   id: string,
@@ -387,6 +572,34 @@ async function auditFeedback(
   });
 }
 
+async function auditKudos(
+  actor: AuthUser,
+  kudos: { id: string; author_user_id: string; recipient_user_ids?: string[]; tags?: string[] },
+  action: string,
+  fromStatus: string | null,
+  state: { status: string; owner: string; nextAction: string | null },
+  metadata: Record<string, unknown> = {},
+) {
+  await writeAuditEvent({
+    actorUserId: actor.id,
+    targetUserId: kudos.recipient_user_ids?.[0] ?? kudos.author_user_id,
+    action,
+    entityType: "kudos_feed_item",
+    entityId: kudos.id,
+    fromStatus,
+    toStatus: state.status,
+    reason: typeof metadata.reason === "string" ? metadata.reason : undefined,
+    metadata: {
+      authorUserId: kudos.author_user_id,
+      recipientUserIds: kudos.recipient_user_ids ?? [],
+      tags: kudos.tags ?? [],
+      owner: state.owner,
+      nextAction: state.nextAction,
+      ...metadata,
+    },
+  });
+}
+
 function toFeedbackNotification(
   request: { id: string; requester_user_id: string; subject_user_id?: string | null; status: string; owner_role: string; next_action: string | null; is_anonymous?: boolean; response_count?: number },
   action: Parameters<typeof notifyFeedbackChanged>[0]["action"],
@@ -400,6 +613,21 @@ function toFeedbackNotification(
     nextAction: request.next_action,
     isAnonymous: request.is_anonymous ?? false,
     responseCount: request.response_count ?? 0,
+    action,
+  };
+}
+
+function toKudosNotification(
+  kudos: { id: string; author_user_id: string; recipient_user_ids?: string[]; status: string; owner_role: string; next_action: string | null },
+  action: Parameters<typeof notifyKudosFeedChanged>[0]["action"],
+) {
+  return {
+    kudosId: kudos.id,
+    authorUserId: kudos.author_user_id,
+    recipientUserIds: kudos.recipient_user_ids ?? [],
+    status: kudos.status,
+    owner: kudos.owner_role,
+    nextAction: kudos.next_action,
     action,
   };
 }

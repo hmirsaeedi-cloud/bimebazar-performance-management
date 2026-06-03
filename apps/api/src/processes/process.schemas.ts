@@ -147,3 +147,45 @@ export const individualSurveyVisibilitySchema = z.object({
     hrAdminCanView: z.boolean().default(true),
   }),
 });
+
+export const listPulseSurveysQuerySchema = z.object({
+  status: z.enum(["draft", "configured", "active", "anonymity_review", "approved", "returned", "released", "completed", "visibility_changed", "cancelled"]).optional(),
+});
+
+export const createPulseSurveySchema = z.object({
+  title: z.string().min(2).max(180),
+  description: z.string().max(800).optional(),
+  formTemplateId: z.string().uuid().optional().nullable(),
+  formTemplateVersionId: z.string().uuid(),
+  targetEmployeeIds: z.array(z.string().uuid()).min(1),
+  minResponses: z.number().int().min(3).max(100).default(3),
+  pulseSettings: z.record(z.unknown()).default({}),
+  visibility: z.object({
+    employeeCanView: z.boolean().default(true),
+    managerCanViewAggregates: z.boolean().default(false),
+    hrbpCanViewAggregates: z.boolean().default(true),
+    hrAdminCanViewAggregates: z.boolean().default(true),
+  }).default({}),
+});
+
+export const updatePulseSurveySchema = createPulseSurveySchema.partial().extend({
+  targetEmployeeIds: z.array(z.string().uuid()).min(1).optional(),
+});
+
+export const pulseSurveyResponseSchema = z.object({
+  respondentCode: z.string().min(8).max(120),
+  answers: z.record(z.unknown()).default({}),
+});
+
+export const pulseSurveyReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const pulseSurveyVisibilitySchema = z.object({
+  visibility: z.object({
+    employeeCanView: z.boolean().default(true),
+    managerCanViewAggregates: z.boolean().default(false),
+    hrbpCanViewAggregates: z.boolean().default(true),
+    hrAdminCanViewAggregates: z.boolean().default(true),
+  }),
+});

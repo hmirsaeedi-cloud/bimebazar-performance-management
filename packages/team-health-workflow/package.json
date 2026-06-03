@@ -1,0 +1,12 @@
+{
+  "name": "@bimebazar/team-health-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/teamHealthWorkflow.d.ts",
+      "default": "./src/teamHealthWorkflow.mjs"
+    }
+  }
+}

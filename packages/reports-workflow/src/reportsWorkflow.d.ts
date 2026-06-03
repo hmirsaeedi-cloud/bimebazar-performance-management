@@ -40,3 +40,32 @@ export declare function summarizeReportMetrics(input: {
   riskRate: number;
   promotionRate: number;
 };
+
+export declare function buildTrendSeries(
+  records: Array<{ date?: string; count?: number; score?: number; flagType?: string }>,
+  options?: { interval?: "month" | "quarter" },
+): Array<{ period: string; count: number; averageScore: number | null; pipFlags: number; promotionFlags: number }>;
+
+export declare function compareCohorts(
+  records: Array<Record<string, unknown>>,
+  cohortKey?: string,
+): Array<{
+  cohort: string;
+  employees: number;
+  evaluations: number;
+  completionRate: number;
+  averageScore: number | null;
+  pipFlags: number;
+  promotionFlags: number;
+}>;
+
+export declare function buildAdvancedAnalytics(
+  records: Array<Record<string, unknown>>,
+  options?: { interval?: "month" | "quarter"; cohortKey?: string },
+): {
+  interval: string;
+  cohortKey: string;
+  trends: ReturnType<typeof buildTrendSeries>;
+  cohorts: ReturnType<typeof compareCohorts>;
+  summary: Record<string, unknown>;
+};

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Team Health Score</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --green:#2f7d49; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form { display:grid; grid-template-columns:repeat(4,minmax(160px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select { border:1px solid var(--line); border-radius:8px; min-height:40px; padding:0 10px; color:var(--ink); font:inherit; background:#fff; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-word; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.healthy,.pill.active { background:#e9f7ed; color:var(--green); }
+      .pill.watch,.pill.returned,.pill.visibility_changed { background:#fff1d6; color:#7a4f00; }
+      .pill.risk { background:#fff0ee; color:var(--danger); }
+      .pill.archived { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      .metrics { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+      .metric { border:1px solid var(--line); border-radius:8px; padding:12px; background:#fbfdfc; }
+      .metric strong { display:block; font-size:1.7rem; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form,.metrics { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Team Health Score</h1>
+          <p>Combine performance, feedback, risk, and task signals into a reviewed dashboard score.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Score</h2>
+        <form id="scoreForm">
+          <label>Team<select id="teamId" required></select></label>
+          <label>Manager<select id="managerId"></select></label>
+          <label>Cycle<input id="cycle" value="1405-H1" required /></label>
+          <label>Name<input id="name" value="Team health score - 1405 H1" required /></label>
+          <label>Evaluation completion<input id="evaluationCompletionRate" type="number" min="0" max="1" step="0.01" value="0.86" /></label>
+          <label>Avg performance<input id="averagePerformanceScore" type="number" min="0" max="5" step="0.1" value="3.9" /></label>
+          <label>Feedback participation<input id="feedbackParticipationRate" type="number" min="0" max="1" step="0.01" value="0.72" /></label>
+          <label>PIP risk<input id="pipRiskRate" type="number" min="0" max="1" step="0.01" value="0.08" /></label>
+          <label>Overdue task rate<input id="overdueTaskRate" type="number" min="0" max="1" step="0.01" value="0.18" /></label>
+          <button type="submit">Create score</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Current Snapshot</h2><p id="snapshotLabel">Loading...</p></div></div>
+        <div class="metrics" id="snapshot"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Scores</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Name</th><th>State</th><th>Score</th><th>Contributions</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let teams = [];
+      let profiles = [];
+      let scores = [];
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        draft:{ status:"draft", owner:"MANAGER", nextAction:"calculate" },
+        submitted:{ status:"submitted", owner:"HRBP", nextAction:"approve" },
+        approved:{ status:"approved", owner:"MANAGER", nextAction:"activate" },
+        active:{ status:"active", owner:"SYSTEM", nextAction:null },
+        returned:{ status:"returned", owner:"MANAGER", nextAction:"update" },
+        visibility_changed:{ status:"visibility_changed", owner:"MANAGER", nextAction:"update" },
+        archived:{ status:"archived", owner:"SYSTEM", nextAction:null },
+      };
+      const actionStatus = { calculate:null, submit:"submitted", approve:"approved", activate:"active", return:"returned", visibility:"visibility_changed", archive:"archived" };
+      const auditActionByAction = { calculate:"calculated", submit:"submitted", approve:"approved", activate:"activated", return:"returned", visibility:"visibility_changed", archive:"archived" };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      function metricsFromForm() { return { evaluationCompletionRate:Number(document.querySelector("#evaluationCompletionRate").value), averagePerformanceScore:Number(document.querySelector("#averagePerformanceScore").value), feedbackParticipationRate:Number(document.querySelector("#feedbackParticipationRate").value), pipRiskRate:Number(document.querySelector("#pipRiskRate").value), overdueTaskRate:Number(document.querySelector("#overdueTaskRate").value) }; }
+      function calculate(metrics) {
+        const parts = { evaluationCompletionRate:(metrics.evaluationCompletionRate || 0) * 25, averagePerformanceScore:((metrics.averagePerformanceScore || 0) / 5) * 25, feedbackParticipationRate:(metrics.feedbackParticipationRate || 0) * 20, pipRiskInverse:(1 - (metrics.pipRiskRate || 0)) * 15, overdueTaskInverse:(1 - (metrics.overdueTaskRate || 0)) * 15 };
+        const score = Math.round(Object.values(parts).reduce((sum, value) => sum + value, 0) * 10) / 10;
+        return { score, band:score >= 80 ? "healthy" : score >= 60 ? "watch" : "risk", contributions:Object.fromEntries(Object.entries(parts).map(([k,v]) => [k, Math.round(v * 10) / 10])) };
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.manager_id || null, action, entity_type:"team_health_score", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason:metadata.reason || null, metadata:{ teamId:item.team_id, managerId:item.manager_id, score:item.score, band:item.band, owner:metadata.owner, nextAction:metadata.nextAction, ...metadata } }) });
+      }
+      async function loadOptions() {
+        teams = await supabaseFetch("/rest/v1/teams?select=*&order=name.asc");
+        profiles = await supabaseFetch("/rest/v1/profiles?select=id,email,display_name,full_name_english,employee_id,account_status&account_status=eq.active&order=employee_id.asc");
+        document.querySelector("#teamId").innerHTML = teams.map((team) => `<option value="${team.id}">${team.name}</option>`).join("");
+        document.querySelector("#managerId").innerHTML = profiles.map((profile) => `<option value="${profile.id}">${profile.employee_id || ""} · ${profile.full_name_english || profile.display_name || profile.email}</option>`).join("");
+      }
+      async function loadScores() {
+        scores = await supabaseFetch("/rest/v1/team_health_scores?select=*&order=updated_at.desc");
+        countLabel.textContent = `${scores.length} score${scores.length === 1 ? "" : "s"}`;
+        rows.innerHTML = scores.map((item) => `<tr>
+          <td><strong>${item.name}</strong><div class="muted">${item.cycle}</div><div class="muted"><code>${item.id}</code></div></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+          <td><strong>${item.score}</strong> <span class="pill ${item.band}">${item.band}</span></td>
+          <td><code>${JSON.stringify(item.contributions)}</code></td>
+          <td class="actions">
+            ${["draft","returned","visibility_changed"].includes(item.status) ? `<button data-action="calculate" data-id="${item.id}">Calculate</button><button data-action="submit" data-id="${item.id}">Submit</button>` : ""}
+            ${item.status === "submitted" ? `<button data-action="approve" data-id="${item.id}">Approve</button><button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+            ${item.status === "approved" ? `<button data-action="activate" data-id="${item.id}">Activate</button>` : ""}
+            ${item.status !== "archived" ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button><button class="secondary" data-action="archive" data-id="${item.id}">Archive</button>` : ""}
+          </td>
+        </tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+        renderSnapshot(scores[0]);
+      }
+      function renderSnapshot(item) {
+        if (!item) { document.querySelector("#snapshot").innerHTML = "<p>No score yet.</p>"; return; }
+        document.querySelector("#snapshotLabel").textContent = `${item.name} · ${item.cycle}`;
+        const entries = { Score:item.score, Band:item.band, Completion:item.metrics?.evaluationCompletionRate, Feedback:item.metrics?.feedbackParticipationRate, "PIP risk":item.metrics?.pipRiskRate };
+        document.querySelector("#snapshot").innerHTML = Object.entries(entries).map(([k,v]) => `<div class="metric"><strong>${v}</strong><span>${k}</span></div>`).join("");
+      }
+      async function createScore(event) {
+        event.preventDefault();
+        const metrics = metricsFromForm();
+        const result = calculate(metrics);
+        const state = stateByStatus.draft;
+        const item = { id:crypto.randomUUID(), team_id:document.querySelector("#teamId").value, manager_id:document.querySelector("#managerId").value || currentUser.id, cycle:document.querySelector("#cycle").value.trim(), status:state.status, owner_role:state.owner, next_action:state.nextAction, name:document.querySelector("#name").value.trim(), metrics, score:result.score, band:result.band, contributions:result.contributions, visibility:{ managerCanView:true, hrbpCanView:true, hrAdminCanView:true, employeeCanView:false }, calculated_at:new Date().toISOString(), created_by:currentUser.id, updated_by:currentUser.id };
+        await supabaseFetch("/rest/v1/team_health_scores", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(item) });
+        await writeAudit("dashboard.team_health.created", item, null, state.status, { owner:state.owner, nextAction:state.nextAction });
+        showMessage("Team health score created and audit event written.", "success");
+        await loadScores();
+      }
+      async function handleAction(id, action) {
+        const item = scores.find((row) => row.id === id);
+        const next = action === "calculate" ? stateByStatus[item.status] : stateByStatus[actionStatus[action]];
+        const patch = { status:next.status, owner_role:next.owner, next_action:next.nextAction, updated_by:currentUser.id, updated_at:new Date().toISOString() };
+        if (action === "calculate") { const result = calculate(item.metrics); patch.score = result.score; patch.band = result.band; patch.contributions = result.contributions; patch.calculated_at = new Date().toISOString(); }
+        if (action === "submit") patch.submitted_at = new Date().toISOString();
+        if (action === "approve") patch.approved_at = new Date().toISOString();
+        if (action === "activate") patch.activated_at = new Date().toISOString();
+        if (action === "return") { patch.returned_at = new Date().toISOString(); patch.last_return_reason = prompt("Reason for return", "Needs metric review.") || "Returned for revision"; }
+        if (action === "visibility") { patch.visibility_changed_at = new Date().toISOString(); patch.visibility = { ...(item.visibility || {}), employeeCanView:true }; }
+        if (action === "archive") patch.archived_at = new Date().toISOString();
+        await supabaseFetch(`/rest/v1/team_health_scores?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        await writeAudit(`dashboard.team_health.${auditActionByAction[action]}`, { ...item, ...patch }, item.status, next.status, { owner:next.owner, nextAction:next.nextAction, reason:patch.last_return_reason });
+        showMessage(`Team health score moved to ${next.status}.`, "success");
+        await loadScores();
+      }
+      async function init() {
+        try {
+          await ensureToken();
+          await loadOptions();
+          await loadScores();
+          document.querySelector("#scoreForm").addEventListener("submit", createScore);
+          document.querySelector("#reloadButton").addEventListener("click", () => init().catch((error) => showMessage(error.message, "error")));
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      }
+      init();
+    </script>
+  </body>
+</html>

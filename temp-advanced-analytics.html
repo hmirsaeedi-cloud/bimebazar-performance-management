@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Advanced Analytics</title>
+    <style>
+      :root {
+        --bg: #f4f7f7;
+        --panel: #ffffff;
+        --ink: #16242a;
+        --muted: #63737b;
+        --line: #d9e3e5;
+        --teal: #087c7c;
+        --green: #2d7d51;
+        --gold: #b57913;
+        --danger: #b64039;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { max-width: 1240px; margin: 0 auto; padding: 28px 18px 52px; }
+      header, .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.9rem, 4vw, 3rem); }
+      h2 { margin: 0 0 12px; }
+      p { margin: 0; color: var(--muted); }
+      a { color: var(--teal); font-weight: 800; text-decoration: none; }
+      section { margin-top: 18px; border: 1px solid var(--line); border-radius: 8px; padding: 18px; background: var(--panel); box-shadow: 0 12px 34px rgba(20, 40, 46, 0.08); }
+      .grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr; gap: 12px; }
+      label { display: grid; gap: 6px; color: var(--muted); font-size: 0.82rem; font-weight: 750; }
+      input, select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px; color: var(--ink); font: inherit; background: #fff; }
+      button { min-height: 40px; border: 0; border-radius: 8px; background: var(--teal); color: #fff; cursor: pointer; font: inherit; font-weight: 800; padding: 0 12px; }
+      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+      button.warning { background: var(--gold); }
+      button.danger { background: var(--danger); }
+      .kpis { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
+      .kpi { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: #fbfcfc; min-height: 84px; }
+      .kpi strong { display: block; font-size: 1.55rem; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 0.78rem; }
+      .pill { display: inline-flex; border-radius: 999px; padding: 4px 8px; background: #e8f4f2; color: #075b5b; font-size: 0.76rem; font-weight: 800; }
+      .muted { margin-top: 4px; color: var(--muted); font-size: 0.76rem; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 240px; }
+      .spark { display: flex; align-items: end; gap: 5px; min-height: 64px; }
+      .bar { width: 22px; border-radius: 4px 4px 0 0; background: var(--teal); min-height: 8px; }
+      .cohort { display: grid; gap: 5px; min-width: 220px; }
+      .cohort span { display: block; color: var(--muted); }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
+      @media (max-width: 960px) {
+        header, .toolbar { align-items: stretch; flex-direction: column; }
+        .grid, .kpis { grid-template-columns: 1fr; }
+        table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Advanced Analytics</h1>
+          <p>Trend and cohort snapshots for HRBP and HR Admin review, with explicit workflow state and audit history.</p>
+        </div>
+        <nav>
+          <a href="/temp-hrbp-reports.html">HRBP Reports</a>
+          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+        </nav>
+      </header>
+
+      <section>
+        <h2>Create Analytics Snapshot</h2>
+        <form id="createForm" class="grid">
+          <label>Title<input id="title" value="Advanced trends and cohort review" required /></label>
+          <label>Period start<input id="periodStart" type="date" /></label>
+          <label>Period end<input id="periodEnd" type="date" /></label>
+          <label>Cohort<select id="cohortKey"><option value="businessUnit">Business unit</option><option value="role">Role</option><option value="manager">Manager</option></select></label>
+          <label>Interval<select id="interval"><option value="month">Monthly</option><option value="quarter">Quarterly</option></select></label>
+          <button type="submit">Create draft</button>
+          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        </form>
+        <div class="kpis" id="kpis"></div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div>
+            <h2>Trend & Cohort Snapshots</h2>
+            <p id="countLabel">Loading...</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Snapshot</th>
+              <th>Status</th>
+              <th>Owner / Next</th>
+              <th>Trend</th>
+              <th>Cohorts</th>
+              <th>Move</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let snapshots = [];
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const message = document.querySelector("#message");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message ${type}`;
+      }
+
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, {
+          ...options,
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { apikey: publishableKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          }).then(async (response) => {
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.msg || "Login failed");
+            return body;
+          });
+          accessToken = data.access_token;
+          localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+
+      function stateFor(status, action) {
+        const table = {
+          draft: { generate: ["generated", "HRBP", "submit"] },
+          generated: { generate: ["generated", "HRBP", "submit"], submit: ["submitted", "HR_ADMIN", "approve"], export: ["exported", "HRBP_HR_ADMIN", "archive"] },
+          submitted: { approve: ["reviewed", "HR_ADMIN", "override_visibility"], return: ["returned", "HRBP", "generate"] },
+          reviewed: { visibility: ["visibility_approved", "HRBP_HR_ADMIN", "export"], export: ["exported", "HRBP_HR_ADMIN", "archive"], return: ["returned", "HRBP", "generate"] },
+          returned: { generate: ["generated", "HRBP", "submit"], submit: ["submitted", "HR_ADMIN", "approve"] },
+          visibility_approved: { export: ["exported", "HRBP_HR_ADMIN", "archive"], archive: ["archived", "SYSTEM", null] },
+          exported: { archive: ["archived", "SYSTEM", null], visibility: ["visibility_approved", "HRBP_HR_ADMIN", "export"] },
+        };
+        return table[status]?.[action];
+      }
+
+      async function writeAudit(action, snapshot, fromStatus, toStatus, metadata, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: currentUser.id,
+            action,
+            entity_type: "advanced_analytics_snapshot",
+            entity_id: snapshot.id,
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata,
+          }),
+        });
+      }
+
+      function monthKey(date) {
+        return String(date).slice(0, 7);
+      }
+
+      function quarterKey(date) {
+        const [year, monthValue] = String(date).slice(0, 10).split("-");
+        return `${year}-Q${Math.max(1, Math.ceil(Number(monthValue || 1) / 3))}`;
+      }
+
+      function buildTrendSeries(records, interval) {
+        const buckets = new Map();
+        records.forEach((record) => {
+          if (!record.date) return;
+          const period = interval === "quarter" ? quarterKey(record.date) : monthKey(record.date);
+          const bucket = buckets.get(period) || { period, count: 0, scoreTotal: 0, scoreCount: 0, pipFlags: 0, promotionFlags: 0 };
+          bucket.count += 1;
+          if (typeof record.score === "number") {
+            bucket.scoreTotal += record.score;
+            bucket.scoreCount += 1;
+          }
+          if (record.flagType === "pip") bucket.pipFlags += 1;
+          if (record.flagType === "promotion") bucket.promotionFlags += 1;
+          buckets.set(period, bucket);
+        });
+        return [...buckets.values()].sort((a, b) => a.period.localeCompare(b.period)).map((bucket) => ({
+          period: bucket.period,
+          count: bucket.count,
+          averageScore: bucket.scoreCount ? Number((bucket.scoreTotal / bucket.scoreCount).toFixed(2)) : null,
+          pipFlags: bucket.pipFlags,
+          promotionFlags: bucket.promotionFlags,
+        }));
+      }
+
+      function compareCohorts(records, cohortKey) {
+        const cohorts = new Map();
+        records.forEach((record) => {
+          const key = record[cohortKey] || "Unassigned";
+          const cohort = cohorts.get(key) || { cohort: key, employees: new Set(), evaluations: 0, completed: 0, scoreTotal: 0, scoreCount: 0, pipFlags: 0, promotionFlags: 0 };
+          if (record.employeeId) cohort.employees.add(record.employeeId);
+          if (record.kind === "evaluation") {
+            cohort.evaluations += 1;
+            if (record.status === "completed") cohort.completed += 1;
+            if (typeof record.score === "number") {
+              cohort.scoreTotal += record.score;
+              cohort.scoreCount += 1;
+            }
+          }
+          if (record.flagType === "pip") cohort.pipFlags += 1;
+          if (record.flagType === "promotion") cohort.promotionFlags += 1;
+          cohorts.set(key, cohort);
+        });
+        return [...cohorts.values()].sort((a, b) => b.evaluations - a.evaluations).map((cohort) => ({
+          cohort: cohort.cohort,
+          employees: cohort.employees.size,
+          evaluations: cohort.evaluations,
+          completionRate: Number(((cohort.completed / (cohort.evaluations || 1)) * 100).toFixed(2)),
+          averageScore: cohort.scoreCount ? Number((cohort.scoreTotal / cohort.scoreCount).toFixed(2)) : null,
+          pipFlags: cohort.pipFlags,
+          promotionFlags: cohort.promotionFlags,
+        }));
+      }
+
+      async function calculateAnalytics(snapshot) {
+        const [profiles, endCycle, midCycle, flags] = await Promise.all([
+          supabaseFetch("/rest/v1/profiles?select=id,account_status,org_unit_id,role_code,manager_id"),
+          supabaseFetch("/rest/v1/end_cycle_evaluations?select=id,status,score,employee_id,created_at"),
+          supabaseFetch("/rest/v1/mid_cycle_evaluations?select=id,status,score,employee_id,created_at"),
+          supabaseFetch("/rest/v1/performance_band_flags?select=id,flag_type,status,weighted_score,employee_id,created_at"),
+        ]);
+        const byId = new Map(profiles.map((profile) => [profile.id, profile]));
+        const inPeriod = (item) => {
+          const date = (item.created_at || "").slice(0, 10);
+          if (snapshot.period_start && date < snapshot.period_start) return false;
+          if (snapshot.period_end && date > snapshot.period_end) return false;
+          return true;
+        };
+        const evaluations = [...endCycle, ...midCycle].filter(inPeriod).map((item) => {
+          const profile = byId.get(item.employee_id) || {};
+          return {
+            kind: "evaluation",
+            date: (item.created_at || "").slice(0, 10),
+            employeeId: item.employee_id,
+            status: item.status,
+            score: item.score?.visible && typeof item.score.totalScore === "number" ? Number(item.score.totalScore) : undefined,
+            businessUnit: profile.org_unit_id || "Unassigned",
+            role: profile.role_code || "Unassigned",
+            manager: profile.manager_id || "Unassigned",
+          };
+        });
+        const flagRecords = flags.filter(inPeriod).map((item) => {
+          const profile = byId.get(item.employee_id) || {};
+          return {
+            kind: "flag",
+            date: (item.created_at || "").slice(0, 10),
+            employeeId: item.employee_id,
+            flagType: item.flag_type,
+            businessUnit: profile.org_unit_id || "Unassigned",
+            role: profile.role_code || "Unassigned",
+            manager: profile.manager_id || "Unassigned",
+          };
+        });
+        const records = [...evaluations, ...flagRecords];
+        const trends = buildTrendSeries(records, snapshot.interval);
+        const cohorts = compareCohorts(records, snapshot.cohort_key);
+        const latest = trends[trends.length - 1];
+        const previous = trends[trends.length - 2];
+        const scoreDelta = latest?.averageScore != null && previous?.averageScore != null ? Number((latest.averageScore - previous.averageScore).toFixed(2)) : null;
+        return {
+          trends,
+          cohorts,
+          summary: {
+            trendPeriods: trends.length,
+            cohortCount: cohorts.length,
+            latestAverageScore: latest?.averageScore ?? null,
+            previousAverageScore: previous?.averageScore ?? null,
+            scoreDelta,
+          },
+          insights: [
+            `${trends.length} trend period(s) generated.`,
+            `${cohorts.length} cohort(s) compared by ${snapshot.cohort_key}.`,
+            scoreDelta === null ? "No visible score movement yet." : `Latest score movement is ${scoreDelta >= 0 ? "+" : ""}${scoreDelta}.`,
+          ],
+        };
+      }
+
+      async function loadSnapshots() {
+        await ensureToken();
+        snapshots = await supabaseFetch("/rest/v1/advanced_analytics_snapshots?select=*&order=updated_at.desc");
+        render();
+      }
+
+      function renderKpis() {
+        const generated = snapshots.filter((item) => item.status === "generated").length;
+        const trendPeriods = snapshots.reduce((sum, item) => sum + Number(item.summary?.trendPeriods || 0), 0);
+        const cohorts = snapshots.reduce((sum, item) => sum + Number(item.summary?.cohortCount || 0), 0);
+        document.querySelector("#kpis").innerHTML = [
+          ["Snapshots", snapshots.length],
+          ["Generated", generated],
+          ["Trend periods", trendPeriods],
+          ["Cohorts", cohorts],
+        ].map(([label, value]) => `<div class="kpi"><strong>${value}</strong><span>${label}</span></div>`).join("");
+      }
+
+      function render() {
+        countLabel.textContent = `${snapshots.length} advanced analytics snapshot(s)`;
+        renderKpis();
+        rows.innerHTML = snapshots.map((snapshot) => {
+          const trends = snapshot.trends || [];
+          const cohorts = snapshot.cohorts || [];
+          const maxCount = Math.max(1, ...trends.map((item) => Number(item.count || 0)));
+          const bars = trends.slice(-6).map((item) => `<div title="${item.period}: ${item.count}" class="bar" style="height:${Math.max(8, (Number(item.count || 0) / maxCount) * 58)}px"></div>`).join("");
+          const cohortRows = cohorts.slice(0, 3).map((item) => `<span>${item.cohort}: ${item.completionRate}% complete, score ${item.averageScore ?? "n/a"}</span>`).join("");
+          return `
+            <tr>
+              <td><strong>${snapshot.title}</strong><div class="muted">${snapshot.cohort_key} · ${snapshot.interval} · ${snapshot.period_start || "open"} to ${snapshot.period_end || "open"}</div></td>
+              <td><span class="pill">${snapshot.status}</span></td>
+              <td>${snapshot.owner_role}<div class="muted">${snapshot.next_action || "Done"}</div></td>
+              <td><div class="spark">${bars || "<span class='muted'>No trend yet</span>"}</div></td>
+              <td><div class="cohort">${cohortRows || "<span>No cohorts yet</span>"}</div></td>
+              <td><div class="actions">${buttons(snapshot)}</div></td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      function buttons(snapshot) {
+        return [
+          ["generate", "Generate", ""],
+          ["submit", "Submit", ""],
+          ["approve", "Approve", ""],
+          ["return", "Return", "warning"],
+          ["visibility", "Visibility", "secondary"],
+          ["export", "Export", "secondary"],
+          ["archive", "Archive", "danger"],
+        ].filter(([action]) => stateFor(snapshot.status, action)).map(([action, label, className]) => `<button class="${className}" onclick="moveSnapshot('${snapshot.id}', '${action}')">${label}</button>`).join("");
+      }
+
+      async function moveSnapshot(id, action) {
+        try {
+          const snapshot = snapshots.find((item) => item.id === id);
+          const next = stateFor(snapshot.status, action);
+          if (!next) return;
+          let patch = { status: next[0], owner_role: next[1], next_action: next[2], updated_by: currentUser.id, updated_at: new Date().toISOString() };
+          let reason = null;
+          if (action === "generate") {
+            const analytics = await calculateAnalytics(snapshot);
+            patch = { ...patch, ...analytics };
+          }
+          if (action === "return") {
+            reason = prompt("Reason for return", "Needs another trend review before approval.");
+            if (!reason) return;
+            patch.returned_at = new Date().toISOString();
+            patch.last_return_reason = reason;
+          }
+          if (action === "visibility") {
+            patch.visibility_changed_at = new Date().toISOString();
+            patch.insights = [...(snapshot.insights || []), "Visibility reviewed for advanced analytics."];
+          }
+          if (action === "submit") patch.submitted_at = new Date().toISOString();
+          if (action === "approve") patch.reviewed_at = new Date().toISOString();
+          if (action === "export") patch.exported_at = new Date().toISOString(), patch.export_format = "csv";
+          if (action === "archive") patch.archived_at = new Date().toISOString();
+          await supabaseFetch(`/rest/v1/advanced_analytics_snapshots?id=eq.${id}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify(patch),
+          });
+          const auditActions = {
+            generate: "reports.advanced.generated",
+            submit: "reports.advanced.submitted",
+            approve: "reports.advanced.approved",
+            return: "reports.advanced.returned",
+            visibility: "reports.advanced.visibility_changed",
+            export: "reports.advanced.exported",
+            archive: "reports.advanced.archived",
+          };
+          await writeAudit(auditActions[action], snapshot, snapshot.status, patch.status, { owner: patch.owner_role, nextAction: patch.next_action }, reason);
+          showMessage(`${action} completed.`, "success");
+          await loadSnapshots();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      }
+
+      document.querySelector("#createForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          await ensureToken();
+          const payload = {
+            report_key: "advanced_trends_cohorts",
+            title: document.querySelector("#title").value,
+            period_start: document.querySelector("#periodStart").value || null,
+            period_end: document.querySelector("#periodEnd").value || null,
+            cohort_key: document.querySelector("#cohortKey").value,
+            interval: document.querySelector("#interval").value,
+            status: "draft",
+            owner_role: "HRBP",
+            next_action: "generate",
+            filters: { scope: "advanced_analytics" },
+            trends: [],
+            cohorts: [],
+            summary: {},
+            insights: [],
+            created_by: currentUser.id,
+            updated_by: currentUser.id,
+          };
+          const created = await supabaseFetch("/rest/v1/advanced_analytics_snapshots?select=*", {
+            method: "POST",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify(payload),
+          });
+          await writeAudit("reports.advanced.created", created[0], null, "draft", { owner: "HRBP", nextAction: "generate" });
+          showMessage("Advanced analytics draft created.", "success");
+          await loadSnapshots();
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      });
+
+      document.querySelector("#refreshButton").addEventListener("click", loadSnapshots);
+      loadSnapshots().catch((error) => showMessage(error.message, "error"));
+    </script>
+  </body>
+</html>

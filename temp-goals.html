@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar OKR Goal Cascading</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      .grid { display:grid; grid-template-columns:1.5fr 1fr 1fr 1fr; gap:12px; align-items:end; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:88px; resize:vertical; }
+      button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-all; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.submitted,.pill.returned { background:#fff1d6; color:#7a4f00; }
+      .pill.completed,.pill.archived { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .bar { height:8px; border-radius:99px; background:#edf2f3; overflow:hidden; margin-top:6px; }
+      .bar span { display:block; height:100%; background:var(--teal); }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>OKR / Goal Cascading</h1>
+          <p>Create parent and child OKRs, track weighted key results, and move goals through review with audit-backed visibility changes.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Goal</h2>
+        <div class="grid">
+          <label>Title<input id="titleInput" value="Improve claims experience" /></label>
+          <label>Owner<select id="ownerSelect"></select></label>
+          <label>Parent goal<select id="parentSelect"><option value="">No parent</option></select></label>
+          <label>Type<select id="typeSelect"><option>company</option><option>department</option><option>team</option><option>individual</option></select></label>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <label>Cycle<input id="cycleInput" value="1405-H1" /></label>
+          <label>KR title<input id="krTitleInput" value="Reduce cycle time" /></label>
+          <label>Current<input id="currentInput" type="number" value="20" /></label>
+          <label>Target<input id="targetInput" type="number" value="100" /></label>
+        </div>
+        <label style="margin-top:12px">Description<textarea id="descriptionInput">Cascade strategic OKRs into measurable team and individual goals.</textarea></label>
+        <div class="actions" style="margin-top:12px">
+          <button id="createButton" type="button">Create goal</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Goal Cascade</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Goal</th><th>Owner</th><th>State</th><th>Progress</th><th>Cascade</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let users = [];
+      let goals = [];
+      const message = document.querySelector("#message");
+      const rows = document.querySelector("#rows");
+      const countLabel = document.querySelector("#countLabel");
+      const stateByStatus = {
+        draft:{ status:"draft", owner:"OWNER", nextAction:"update" },
+        submitted:{ status:"submitted", owner:"MANAGER", nextAction:"approve" },
+        approved:{ status:"approved", owner:"HRBP", nextAction:"activate" },
+        returned:{ status:"returned", owner:"OWNER", nextAction:"update" },
+        active:{ status:"active", owner:"OWNER", nextAction:"update" },
+        visibility_changed:{ status:"visibility_changed", owner:"HRBP", nextAction:"activate" },
+        completed:{ status:"completed", owner:"SYSTEM", nextAction:null },
+        archived:{ status:"archived", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      function progress(keyResults) {
+        if (!keyResults?.length) return 0;
+        const totalWeight = keyResults.reduce((sum, item) => sum + Number(item.weight || 1), 0);
+        const weighted = keyResults.reduce((sum, item) => sum + Math.max(0, Math.min(100, (Number(item.currentValue || 0) / Number(item.targetValue || 1)) * 100)) * Number(item.weight || 1), 0);
+        return totalWeight ? Number((weighted / totalWeight).toFixed(2)) : 0;
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}, reason = null) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.owner_user_id, action, entity_type:"goal", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason, metadata:{ parentGoalId:item.parent_goal_id, cascadePath:item.cascade_path || [], owner:stateByStatus[toStatus]?.owner, nextAction:stateByStatus[toStatus]?.nextAction || null, ...metadata } }) });
+      }
+      async function loadUsers() {
+        users = await supabaseFetch("/rest/v1/profiles?select=id,email,display_name,role_code,account_status&account_status=eq.active&order=display_name.asc");
+        document.querySelector("#ownerSelect").innerHTML = users.map((user) => `<option value="${user.id}">${user.display_name || user.email} - ${user.role_code}</option>`).join("");
+        if (users.some((user) => user.id === currentUser.id)) document.querySelector("#ownerSelect").value = currentUser.id;
+      }
+      async function loadGoals() {
+        goals = await supabaseFetch("/rest/v1/goals?select=*&order=updated_at.desc");
+        countLabel.textContent = `${goals.length} goal${goals.length === 1 ? "" : "s"}`;
+        document.querySelector("#parentSelect").innerHTML = `<option value="">No parent</option>` + goals.map((goal) => `<option value="${goal.id}">${goal.title} - ${goal.status}</option>`).join("");
+        rows.innerHTML = goals.map((goal) => `<tr>
+          <td>${goal.title}<div class="muted">${goal.goal_type} / ${goal.cycle}</div></td>
+          <td><code>${goal.owner_user_id}</code><div class="muted">${users.find((user) => user.id === goal.owner_user_id)?.email || ""}</div></td>
+          <td><span class="pill ${goal.status}">${goal.status}</span><div class="muted">${goal.owner_role} / ${goal.next_action || "done"}</div></td>
+          <td>${goal.progress_percent}%<div class="bar"><span style="width:${Math.min(100, Number(goal.progress_percent || 0))}%"></span></div></td>
+          <td><code>${(goal.cascade_path || []).join(" -> ")}</code><div class="muted">Parent: ${goal.parent_goal_id || "-"}</div></td>
+          <td class="actions">
+            <button data-action="update" data-id="${goal.id}">Update KR</button>
+            <button data-action="submit" data-id="${goal.id}">Submit</button>
+            ${goal.status === "submitted" ? `<button data-action="approve" data-id="${goal.id}">Approve</button><button class="warning" data-action="return" data-id="${goal.id}">Return</button>` : ""}
+            ${goal.status === "approved" || goal.status === "visibility_changed" ? `<button data-action="activate" data-id="${goal.id}">Activate</button>` : ""}
+            ${goal.status === "active" ? `<button data-action="complete" data-id="${goal.id}">Complete</button>` : ""}
+            <button class="secondary" data-action="visibility" data-id="${goal.id}">Visibility</button>
+            <button class="secondary" data-action="archive" data-id="${goal.id}">Archive</button>
+          </td>
+        </tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function createGoal() {
+        const parentId = document.querySelector("#parentSelect").value || null;
+        const parent = goals.find((goal) => goal.id === parentId);
+        const state = stateByStatus.draft;
+        const keyResults = [{ id:"kr1", title:document.querySelector("#krTitleInput").value, currentValue:Number(document.querySelector("#currentInput").value), targetValue:Number(document.querySelector("#targetInput").value), unit:"%", weight:1 }];
+        const [item] = await supabaseFetch("/rest/v1/goals?select=*", { method:"POST", headers:{ Prefer:"return=representation" }, body:JSON.stringify({
+          parent_goal_id:parentId,
+          cascade_path:[...(parent?.cascade_path || [])],
+          owner_user_id:document.querySelector("#ownerSelect").value,
+          created_by_user_id:currentUser.id,
+          status:state.status,
+          owner_role:state.owner,
+          next_action:state.nextAction,
+          title:document.querySelector("#titleInput").value,
+          description:document.querySelector("#descriptionInput").value,
+          cycle:document.querySelector("#cycleInput").value,
+          goal_type:document.querySelector("#typeSelect").value,
+          key_results:keyResults,
+          progress_percent:progress(keyResults),
+          visibility:{ employeeCanView:true, managerCanView:true, hrbpCanView:true, hrAdminCanView:true },
+          created_by:currentUser.id,
+          updated_by:currentUser.id,
+        }) });
+        await supabaseFetch(`/rest/v1/goals?id=eq.${item.id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ cascade_path:[...(parent?.cascade_path || []), item.id] }) });
+        await writeAudit("goals.created", { ...item, cascade_path:[...(parent?.cascade_path || []), item.id] }, null, state.status, { progressPercent:progress(keyResults) });
+        showMessage("Goal created and audit event written.", "success");
+        await loadGoals();
+      }
+      async function handleAction(id, action) {
+        const item = goals.find((goal) => goal.id === id);
+        if (!item) throw new Error("Goal not found.");
+        if (action === "update") {
+          const currentValue = Number(prompt("New current value", String(item.key_results?.[0]?.currentValue || 0)));
+          const keyResults = [{ ...(item.key_results?.[0] || { id:"kr1", title:"Key result", targetValue:100, unit:"%", weight:1 }), currentValue }];
+          await patchGoal(item, { key_results:keyResults, progress_percent:progress(keyResults) }, "goals.updated", stateByStatus[item.status], { progressPercent:progress(keyResults) });
+        }
+        if (action === "submit") await patchGoal(item, { submitted_at:new Date().toISOString() }, "goals.submitted", stateByStatus.submitted);
+        if (action === "approve") await patchGoal(item, { approved_at:new Date().toISOString() }, "goals.approved", stateByStatus.approved);
+        if (action === "activate") await patchGoal(item, { activated_at:new Date().toISOString() }, "goals.activated", stateByStatus.active);
+        if (action === "return") {
+          const reason = prompt("Return reason", "Goal needs clearer measurable key results") || "";
+          if (reason.trim().length < 8) throw new Error("Return reason must be at least 8 characters.");
+          await patchGoal(item, { returned_at:new Date().toISOString(), last_return_reason:reason }, "goals.returned", stateByStatus.returned, { reason }, reason);
+        }
+        if (action === "visibility") await patchGoal(item, { visibility:{ employeeCanView:true, managerCanView:true, hrbpCanView:true, hrAdminCanView:true }, visibility_changed_at:new Date().toISOString() }, "goals.visibility_changed", stateByStatus.visibility_changed);
+        if (action === "complete") await patchGoal(item, { completed_at:new Date().toISOString() }, "goals.completed", stateByStatus.completed);
+        if (action === "archive") await patchGoal(item, { archived_at:new Date().toISOString() }, "goals.archived", stateByStatus.archived);
+        showMessage("Goal workflow action saved and audit event written.", "success");
+        await loadGoals();
+      }
+      async function patchGoal(item, patch, auditAction, state, metadata = {}, reason = null) {
+        await supabaseFetch(`/rest/v1/goals?id=eq.${item.id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ ...patch, status:state.status, owner_role:state.owner, next_action:state.nextAction, updated_by:currentUser.id, updated_at:new Date().toISOString() }) });
+        await writeAudit(auditAction, item, item.status, state.status, metadata, reason);
+      }
+      document.querySelector("#createButton").addEventListener("click", () => createGoal().catch((error) => showMessage(error.message, "error")));
+      document.querySelector("#reloadButton").addEventListener("click", () => loadGoals().catch((error) => showMessage(error.message, "error")));
+      (async function init() { try { await ensureToken(); await loadUsers(); await loadGoals(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load goals"; } })();
+    </script>
+  </body>
+</html>

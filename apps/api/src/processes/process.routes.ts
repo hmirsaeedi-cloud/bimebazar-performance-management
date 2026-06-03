@@ -10,49 +10,64 @@ import {
   formInstanceReturnSchema,
   formInstanceVisibilitySchema,
   createIndividualSurveySchema,
+  createPulseSurveySchema,
   individualSurveyResponseSchema,
   individualSurveyReturnSchema,
   individualSurveyVisibilitySchema,
   listIndividualSurveysQuerySchema,
+  listPulseSurveysQuerySchema,
   listProcessesQuerySchema,
   processDecisionSchema,
+  pulseSurveyResponseSchema,
+  pulseSurveyReturnSchema,
+  pulseSurveyVisibilitySchema,
   selfAssessmentResponseSchema,
   selfAssessmentReturnSchema,
   selfAssessmentVisibilitySchema,
   updateProcessSchema,
   updateIndividualSurveySchema,
+  updatePulseSurveySchema,
 } from "./process.schemas.js";
 import {
   approveDownwardHrbp,
   approveDownwardNextLevel,
   approveIndividualSurveyResponse,
+  approvePulseSurvey,
   adminMoveProcessFormInstance,
   approveProcessFormInstance,
   closeProcessFormInstance,
   approveSelfAssessment,
   cancelIndividualSurvey,
+  cancelPulseSurvey,
   completeSelfAssessment,
   completeDownwardEvaluation,
   completeIndividualSurvey,
+  completePulseSurvey,
   configureProcess,
   createIndividualSurvey,
+  createPulseSurvey,
   createProcess,
   getProcess,
   listDownwardEvaluations,
   listIndividualSurveys,
+  listPulseSurveys,
   listProcessFormInstances,
   listProcesses,
   listSelfAssessments,
   moveProcess,
   returnDownwardEvaluation,
   returnIndividualSurveyResponse,
+  returnPulseSurvey,
   returnProcessFormInstance,
   returnSelfAssessment,
+  releasePulseSurvey,
   startDownwardEvaluation,
   startIndividualSurvey,
+  startPulseSurvey,
   startSelfAssessment,
   submitDownwardEvaluation,
   submitIndividualSurveyResponse,
+  submitPulseSurveyResponse,
   submitProcessFormInstance,
   submitSelfAssessment,
   syncProcessFormInstances,
@@ -60,6 +75,8 @@ import {
   updateDownwardEvaluationVisibility,
   updateIndividualSurvey,
   updateIndividualSurveyVisibility,
+  updatePulseSurvey,
+  updatePulseSurveyVisibility,
   updateProcessFormInstance,
   updateProcessFormInstanceVisibility,
   updateSelfAssessmentVisibility,
@@ -392,6 +409,101 @@ processRouter.post("/surveys/individual/responses/:responseId/return", requirePe
   try {
     const input = individualSurveyReturnSchema.parse(req.body);
     res.json({ response: await returnIndividualSurveyResponse({ actor: req.user!, id: req.params.responseId, reason: input.reason }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.get("/surveys/pulse", requirePermission("process.pulse.read"), async (req, res, next) => {
+  try {
+    const query = listPulseSurveysQuerySchema.parse(req.query);
+    res.json({ surveys: await listPulseSurveys(query) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/pulse", requirePermission("process.pulse.create"), async (req, res, next) => {
+  try {
+    const input = createPulseSurveySchema.parse(req.body);
+    res.status(201).json({ survey: await createPulseSurvey({ actor: req.user!, ...input }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.patch("/surveys/pulse/:surveyId", requirePermission("process.pulse.update"), async (req, res, next) => {
+  try {
+    const patch = updatePulseSurveySchema.parse(req.body);
+    res.json({ survey: await updatePulseSurvey({ actor: req.user!, id: req.params.surveyId, patch }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/pulse/:surveyId/start", requirePermission("process.pulse.start"), async (req, res, next) => {
+  try {
+    res.json({ survey: await startPulseSurvey({ actor: req.user!, id: req.params.surveyId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/pulse/:surveyId/responses", requirePermission("process.pulse.submit"), async (req, res, next) => {
+  try {
+    const input = pulseSurveyResponseSchema.parse(req.body);
+    res.status(201).json(await submitPulseSurveyResponse({ actor: req.user!, id: req.params.surveyId, respondentCode: input.respondentCode, answers: input.answers }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/pulse/:surveyId/approve", requirePermission("process.pulse.approve"), async (req, res, next) => {
+  try {
+    res.json({ survey: await approvePulseSurvey({ actor: req.user!, id: req.params.surveyId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/pulse/:surveyId/release", requirePermission("process.pulse.release"), async (req, res, next) => {
+  try {
+    res.json({ survey: await releasePulseSurvey({ actor: req.user!, id: req.params.surveyId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/pulse/:surveyId/return", requirePermission("process.pulse.return"), async (req, res, next) => {
+  try {
+    const input = pulseSurveyReturnSchema.parse(req.body);
+    res.json({ survey: await returnPulseSurvey({ actor: req.user!, id: req.params.surveyId, reason: input.reason }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.patch("/surveys/pulse/:surveyId/visibility", requirePermission("process.pulse.override"), async (req, res, next) => {
+  try {
+    const input = pulseSurveyVisibilitySchema.parse(req.body);
+    res.json({ survey: await updatePulseSurveyVisibility({ actor: req.user!, id: req.params.surveyId, visibility: input.visibility }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/pulse/:surveyId/complete", requirePermission("process.pulse.complete"), async (req, res, next) => {
+  try {
+    res.json({ survey: await completePulseSurvey({ actor: req.user!, id: req.params.surveyId }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+processRouter.post("/surveys/pulse/:surveyId/cancel", requirePermission("process.pulse.cancel"), async (req, res, next) => {
+  try {
+    const input = processDecisionSchema.parse(req.body);
+    res.json({ survey: await cancelPulseSurvey({ actor: req.user!, id: req.params.surveyId, reason: input.reason }) });
   } catch (error) {
     next(error);
   }

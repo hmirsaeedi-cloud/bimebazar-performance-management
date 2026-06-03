@@ -40,3 +40,40 @@ export const listPdChatsQuerySchema = z.object({
   evaluationId: z.string().uuid().optional(),
   status: z.enum(["draft", "active", "submitted", "manager_reviewed", "returned", "visibility_approved", "archived"]).optional(),
 });
+
+export const createPdChatScheduleSchema = z.object({
+  employeeId: z.string().uuid(),
+  managerId: z.string().uuid().optional().nullable(),
+  topic: z.string().min(3).max(180),
+  cadence: z.enum(["weekly", "biweekly", "monthly", "quarterly"]),
+  startAt: z.string().datetime(),
+  timezone: z.string().min(3).max(64).default("Asia/Tehran"),
+  durationMinutes: z.number().int().min(15).max(180).default(45),
+  visibility: z.object({
+    employeeCanView: z.boolean().default(true),
+    managerCanView: z.boolean().default(true),
+    hrbpCanView: z.boolean().default(false),
+  }).optional(),
+});
+
+export const updatePdChatScheduleSchema = createPdChatScheduleSchema.partial();
+
+export const listPdChatSchedulesQuerySchema = z.object({
+  employeeId: z.string().uuid().optional(),
+  managerId: z.string().uuid().optional(),
+  status: z.enum(["draft", "submitted", "approved", "active", "paused", "returned", "visibility_changed", "archived"]).optional(),
+  cadence: z.enum(["weekly", "biweekly", "monthly", "quarterly"]).optional(),
+});
+
+export const pdChatScheduleReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const pdChatScheduleVisibilitySchema = z.object({
+  visibility: z.object({
+    employeeCanView: z.boolean().default(true),
+    managerCanView: z.boolean().default(true),
+    hrbpCanView: z.boolean().default(false),
+  }),
+  reason: z.string().min(8).max(500),
+});

@@ -1,0 +1,12 @@
+{
+  "name": "@bimebazar/kudos-feed-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/kudosFeedWorkflow.d.ts",
+      "default": "./src/kudosFeedWorkflow.mjs"
+    }
+  }
+}

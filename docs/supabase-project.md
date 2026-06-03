@@ -49,6 +49,7 @@ URL: `https://omjblauittoyxknabrqg.supabase.co`
 `20260602121415_admin_form_movement_audit_reason`
 `20260602122152_notification_preference_settings`
 `20260602122940_self_assessment_manager_side_by_side`
+`20260602170444_okr_goal_cascading`
 
 This created:
 
@@ -200,6 +201,26 @@ Table:
 
 - `hrbp_report_snapshots`
 
+Advanced analytics trends and cohorts are guarded by:
+
+- `reports.advanced.read`
+- `reports.advanced.create`
+- `reports.advanced.generate`
+- `reports.advanced.submit`
+- `reports.advanced.approve`
+- `reports.advanced.return`
+- `reports.advanced.override`
+- `reports.advanced.export`
+- `reports.advanced.archive`
+
+Table:
+
+- `advanced_analytics_snapshots`
+
+Supabase migration version:
+
+- Pending apply: `advanced_analytics_trends_cohorts`
+
 Admin form movement is guarded by:
 
 - `process.admin_move`
@@ -239,6 +260,163 @@ Self-assessment vs. manager side-by-side comparisons are guarded by:
 Table:
 
 - `evaluation_comparisons`
+
+OKR / goal cascading is guarded by:
+
+- `goals.read`
+- `goals.create`
+- `goals.update`
+- `goals.submit`
+- `goals.approve`
+- `goals.return`
+- `goals.override`
+- `goals.complete`
+- `goals.archive`
+
+Table:
+
+- `goals`
+
+Conditional form logic is guarded by:
+
+- `forms.conditional_read`
+- `forms.conditional_create`
+- `forms.conditional_update`
+- `forms.conditional_submit`
+- `forms.conditional_approve`
+- `forms.conditional_return`
+- `forms.conditional_override`
+- `forms.conditional_archive`
+
+Table:
+
+- `form_conditional_logic_rules`
+
+Supabase migration version:
+
+- `20260602171556`
+
+Visual org chart on profile is guarded by:
+
+- `profiles.org_chart_read`
+- `profiles.org_chart_create`
+- `profiles.org_chart_update`
+- `profiles.org_chart_submit`
+- `profiles.org_chart_approve`
+- `profiles.org_chart_return`
+- `profiles.org_chart_override`
+- `profiles.org_chart_archive`
+
+Table:
+
+- `profile_org_charts`
+
+Supabase migration version:
+
+- `20260602172408`
+
+HRIS API integration is guarded by:
+
+- `core.hris.read`
+- `core.hris.create`
+- `core.hris.update`
+- `core.hris.submit`
+- `core.hris.approve`
+- `core.hris.return`
+- `core.hris.override`
+- `core.hris.sync`
+- `core.hris.archive`
+
+Tables:
+
+- `hris_integrations`
+- `hris_sync_runs`
+
+Supabase migration version:
+
+- `20260602173511`
+
+Team Health Score is guarded by:
+
+- `dashboard.team_health.read`
+- `dashboard.team_health.create`
+- `dashboard.team_health.update`
+- `dashboard.team_health.submit`
+- `dashboard.team_health.approve`
+- `dashboard.team_health.return`
+- `dashboard.team_health.override`
+- `dashboard.team_health.archive`
+
+Table:
+
+- `team_health_scores`
+
+Supabase migration versions:
+
+- `20260602174445`
+- `20260602174534`
+
+Recurring PD Chat Scheduler is guarded by:
+
+- `pd_chat.scheduler_read`
+- `pd_chat.scheduler_create`
+- `pd_chat.scheduler_update`
+- `pd_chat.scheduler_submit`
+- `pd_chat.scheduler_approve`
+- `pd_chat.scheduler_return`
+- `pd_chat.scheduler_override`
+- `pd_chat.scheduler_archive`
+
+Table:
+
+- `pd_chat_schedules`
+
+Supabase migration version:
+
+- `20260602180448`
+
+Anonymized Pulse Surveys are guarded by:
+
+- `process.pulse.read`
+- `process.pulse.create`
+- `process.pulse.update`
+- `process.pulse.start`
+- `process.pulse.submit`
+- `process.pulse.approve`
+- `process.pulse.return`
+- `process.pulse.override`
+- `process.pulse.release`
+- `process.pulse.complete`
+- `process.pulse.cancel`
+
+Tables:
+
+- `pulse_survey_processes`
+- `pulse_survey_responses`
+
+Supabase migration version:
+
+- `20260602234814`
+
+Real-time Feedback / Kudos Feed is guarded by:
+
+- `feedback.kudos.read`
+- `feedback.kudos.create`
+- `feedback.kudos.update`
+- `feedback.kudos.submit`
+- `feedback.kudos.approve`
+- `feedback.kudos.return`
+- `feedback.kudos.override`
+- `feedback.kudos.publish`
+- `feedback.kudos.archive`
+
+Table:
+
+- `kudos_feed_items`
+
+Supabase migration version:
+
+- `20260603001836`
 
 ## Environment
 

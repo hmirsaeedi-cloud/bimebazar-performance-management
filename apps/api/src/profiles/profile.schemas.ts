@@ -93,3 +93,40 @@ export const deactivateProfileSchema = z.object({
   reason: z.string().min(8).max(500),
   exitDate: calendarDateSchema.optional(),
 });
+
+const orgChartVisibilitySchema = z.object({
+  employeeCanView: z.boolean().default(true),
+  managerCanView: z.boolean().default(true),
+  hrbpCanView: z.boolean().default(true),
+  hrAdminCanView: z.boolean().default(true),
+});
+
+export const listProfileOrgChartsQuerySchema = z.object({
+  rootProfileId: z.string().uuid().optional(),
+  status: z.enum(["draft", "submitted", "approved", "active", "returned", "visibility_changed", "archived"]).optional(),
+});
+
+export const createProfileOrgChartSchema = z.object({
+  rootProfileId: z.string().uuid(),
+  name: z.string().min(2).max(180),
+  description: z.string().max(800).optional(),
+  maxDepth: z.number().int().min(1).max(6).default(3),
+  layout: z.enum(["tree", "radial", "compact"]).default("tree"),
+  visibility: orgChartVisibilitySchema.default({ employeeCanView: true, managerCanView: true, hrbpCanView: true, hrAdminCanView: true }),
+});
+
+export const updateProfileOrgChartSchema = z.object({
+  name: z.string().min(2).max(180).optional(),
+  description: z.string().max(800).nullable().optional(),
+  maxDepth: z.number().int().min(1).max(6).optional(),
+  layout: z.enum(["tree", "radial", "compact"]).optional(),
+});
+
+export const profileOrgChartDecisionSchema = z.object({
+  reason: z.string().min(8).max(500).optional(),
+});
+
+export const profileOrgChartVisibilitySchema = z.object({
+  visibility: orgChartVisibilitySchema,
+  reason: z.string().min(8).max(500),
+});

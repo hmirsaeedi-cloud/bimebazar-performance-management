@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Recurring PD Chat Scheduler</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --green:#2f7d49; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      a { color:var(--teal); font-weight:800; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form { display:grid; grid-template-columns:repeat(4,minmax(160px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select { border:1px solid var(--line); border-radius:8px; min-height:40px; padding:0 10px; color:var(--ink); font:inherit; background:#fff; }
+      button { min-height:38px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-word; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.active,.pill.approved { background:#e9f7ed; color:var(--green); }
+      .pill.paused,.pill.returned,.pill.visibility_changed { background:#fff1d6; color:#7a4f00; }
+      .pill.archived { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      .preview { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:12px; }
+      .preview div { border:1px solid var(--line); border-radius:8px; padding:10px; background:#fbfdfc; color:var(--muted); }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form,.preview { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Recurring PD Chat Scheduler</h1>
+          <p>Plan repeated employee-manager development conversations and generate real PD Chat logs from each active schedule.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Schedule</h2>
+        <form id="scheduleForm">
+          <label>Employee<select id="employeeId" required></select></label>
+          <label>Manager<select id="managerId"></select></label>
+          <label>Cadence<select id="cadence"><option>weekly</option><option>biweekly</option><option selected>monthly</option><option>quarterly</option></select></label>
+          <label>Start date<input id="startAt" type="datetime-local" required /></label>
+          <label>Duration<input id="durationMinutes" type="number" min="15" max="180" value="45" /></label>
+          <label class="full">Topic<input id="topic" value="Recurring development check-in" maxlength="180" required /></label>
+          <button type="submit">Create schedule</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </form>
+        <div class="preview" id="preview"></div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar">
+          <div><h2>Schedules</h2><p id="countLabel">Loading...</p></div>
+        </div>
+        <table>
+          <thead><tr><th>Topic</th><th>People</th><th>State</th><th>Timing</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let profiles = [];
+      let schedules = [];
+      const rows = document.querySelector("#rows");
+      const message = document.querySelector("#message");
+      const countLabel = document.querySelector("#countLabel");
+      const states = {
+        draft:{ status:"draft", owner:"EMPLOYEE_MANAGER", nextAction:"update" },
+        submitted:{ status:"submitted", owner:"MANAGER", nextAction:"approve" },
+        approved:{ status:"approved", owner:"MANAGER", nextAction:"activate" },
+        active:{ status:"active", owner:"SYSTEM", nextAction:"generate_occurrence" },
+        paused:{ status:"paused", owner:"MANAGER", nextAction:"resume" },
+        returned:{ status:"returned", owner:"EMPLOYEE_MANAGER", nextAction:"update" },
+        visibility_changed:{ status:"visibility_changed", owner:"MANAGER", nextAction:"update" },
+        archived:{ status:"archived", owner:"SYSTEM", nextAction:null },
+      };
+      const actionToStatus = { submit:"submitted", approve:"approved", activate:"active", pause:"paused", resume:"active", return:"returned", visibility:"visibility_changed", archive:"archived" };
+      const auditAction = { submit:"submitted", approve:"approved", activate:"activated", pause:"paused", resume:"resumed", return:"returned", visibility:"visibility_changed", generate:"occurrence_generated", archive:"archived" };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      function profileName(id) {
+        const profile = profiles.find((item) => item.id === id);
+        return profile ? `${profile.employee_id || ""} ${profile.full_name_english || profile.display_name || profile.email}`.trim() : "Not selected";
+      }
+      function addCadence(date, cadence) {
+        const next = new Date(date);
+        if (cadence === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+        if (cadence === "biweekly") next.setUTCDate(next.getUTCDate() + 14);
+        if (cadence === "monthly") next.setUTCMonth(next.getUTCMonth() + 1);
+        if (cadence === "quarterly") next.setUTCMonth(next.getUTCMonth() + 3);
+        return next;
+      }
+      function nextOccurrences(startAt, cadence, count = 4) {
+        const dates = []; let cursor = new Date(startAt);
+        for (let index = 0; index < count; index += 1) { dates.push(cursor.toISOString()); cursor = addCadence(cursor, cadence); }
+        return dates;
+      }
+      function renderPreview() {
+        const local = document.querySelector("#startAt").value;
+        if (!local) return;
+        const cadence = document.querySelector("#cadence").value;
+        document.querySelector("#preview").innerHTML = nextOccurrences(new Date(local).toISOString(), cadence).map((date) => `<div>${new Date(date).toLocaleString()}</div>`).join("");
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.employee_id, action, entity_type:"pd_chat_schedule", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason:metadata.reason || null, metadata:{ managerId:item.manager_id, cadence:item.cadence, nextOccurrenceAt:item.next_occurrence_at, owner:metadata.owner, nextAction:metadata.nextAction, ...metadata } }) });
+      }
+      async function loadOptions() {
+        profiles = await supabaseFetch("/rest/v1/profiles?select=id,email,display_name,full_name_english,employee_id,manager_id,account_status&account_status=eq.active&order=employee_id.asc");
+        const options = profiles.map((profile) => `<option value="${profile.id}">${profile.employee_id || ""} · ${profile.full_name_english || profile.display_name || profile.email}</option>`).join("");
+        document.querySelector("#employeeId").innerHTML = options;
+        document.querySelector("#managerId").innerHTML = `<option value="">Auto / empty</option>${options}`;
+        document.querySelector("#startAt").value = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16);
+        renderPreview();
+      }
+      async function loadSchedules() {
+        schedules = await supabaseFetch("/rest/v1/pd_chat_schedules?select=*&order=updated_at.desc");
+        countLabel.textContent = `${schedules.length} schedule${schedules.length === 1 ? "" : "s"}`;
+        rows.innerHTML = schedules.map((item) => `<tr>
+          <td><strong>${item.topic}</strong><div class="muted"><code>${item.id}</code></div></td>
+          <td>${profileName(item.employee_id)}<div class="muted">Manager: ${profileName(item.manager_id)}</div></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+          <td>${item.cadence}<div class="muted">Next: ${new Date(item.next_occurrence_at).toLocaleString()}</div><div class="muted">${item.duration_minutes} minutes · generated ${item.generated_count}</div></td>
+          <td class="actions">
+            ${["draft","returned","visibility_changed"].includes(item.status) ? `<button data-action="submit" data-id="${item.id}">Submit</button>` : ""}
+            ${item.status === "submitted" ? `<button data-action="approve" data-id="${item.id}">Approve</button><button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+            ${item.status === "approved" ? `<button data-action="activate" data-id="${item.id}">Activate</button>` : ""}
+            ${item.status === "active" ? `<button data-action="generate" data-id="${item.id}">Generate chat</button><button class="warning" data-action="pause" data-id="${item.id}">Pause</button>` : ""}
+            ${item.status === "paused" ? `<button data-action="resume" data-id="${item.id}">Resume</button>` : ""}
+            ${item.status !== "archived" ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button><button class="secondary" data-action="archive" data-id="${item.id}">Archive</button>` : ""}
+          </td>
+        </tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function createSchedule(event) {
+        event.preventDefault();
+        const employeeId = document.querySelector("#employeeId").value;
+        const profile = profiles.find((item) => item.id === employeeId);
+        const state = states.draft;
+        const startAt = new Date(document.querySelector("#startAt").value).toISOString();
+        const item = { id:crypto.randomUUID(), employee_id:employeeId, manager_id:document.querySelector("#managerId").value || profile?.manager_id || null, status:state.status, owner_role:state.owner, next_action:state.nextAction, topic:document.querySelector("#topic").value.trim(), cadence:document.querySelector("#cadence").value, start_at:startAt, next_occurrence_at:startAt, timezone:"Asia/Tehran", duration_minutes:Number(document.querySelector("#durationMinutes").value), visibility:{ employeeCanView:true, managerCanView:true, hrbpCanView:false }, created_by:currentUser.id, updated_by:currentUser.id };
+        await supabaseFetch("/rest/v1/pd_chat_schedules", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(item) });
+        await writeAudit("pd_chat.schedule.created", item, null, state.status, { owner:state.owner, nextAction:state.nextAction });
+        showMessage("Recurring PD Chat schedule created and audit event written.", "success");
+        await loadSchedules();
+      }
+      async function createChatFromSchedule(item) {
+        const chatState = { status:"active", owner:"EMPLOYEE_MANAGER", nextAction:"submit" };
+        const chat = { id:crypto.randomUUID(), employee_id:item.employee_id, manager_id:item.manager_id, status:chatState.status, owner_role:chatState.owner, next_action:chatState.nextAction, topic:`${item.topic} (${new Date(item.next_occurrence_at).toISOString().slice(0, 10)})`, messages:[{ id:crypto.randomUUID(), authorId:currentUser.id, authorRole:"HR_ADMIN", body:"Scheduled recurring development check-in.", createdAt:new Date().toISOString(), editedAt:null, visibility:"employee_manager" }], visibility:item.visibility, created_by:currentUser.id, updated_by:currentUser.id };
+        await supabaseFetch("/rest/v1/pd_chat_logs", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(chat) });
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:item.employee_id, action:"pd_chat.created", entity_type:"pd_chat_log", entity_id:chat.id, from_status:null, to_status:chat.status, metadata:{ source:"recurring_schedule", scheduleId:item.id, owner:chatState.owner, nextAction:chatState.nextAction } }) });
+        return chat;
+      }
+      async function handleAction(id, action) {
+        const item = schedules.find((row) => row.id === id);
+        const patch = { updated_by:currentUser.id, updated_at:new Date().toISOString() };
+        let generatedChat = null;
+        let next = action === "generate" ? states.active : states[actionToStatus[action]];
+        if (action === "return") { patch.returned_at = new Date().toISOString(); patch.last_return_reason = prompt("Reason for return", "Schedule needs timing review.") || "Returned for revision"; }
+        if (action === "visibility") { patch.visibility_changed_at = new Date().toISOString(); patch.visibility = { ...(item.visibility || {}), employeeCanView:true, hrbpCanView:true }; patch.last_return_reason = prompt("Reason for visibility change", "HRBP visibility enabled for recurring chat governance.") || "Visibility changed"; }
+        if (action === "generate") {
+          generatedChat = await createChatFromSchedule(item);
+          const nextDate = nextOccurrences(item.next_occurrence_at, item.cadence, 2)[1];
+          patch.next_occurrence_at = nextDate; patch.generated_count = Number(item.generated_count || 0) + 1; patch.last_generated_chat_id = generatedChat.id;
+        }
+        if (action === "submit") patch.submitted_at = new Date().toISOString();
+        if (action === "approve") patch.approved_at = new Date().toISOString();
+        if (action === "activate") patch.activated_at = new Date().toISOString();
+        if (action === "pause") patch.paused_at = new Date().toISOString();
+        if (action === "resume") patch.resumed_at = new Date().toISOString();
+        if (action === "archive") patch.archived_at = new Date().toISOString();
+        patch.status = next.status; patch.owner_role = next.owner; patch.next_action = next.nextAction;
+        await supabaseFetch(`/rest/v1/pd_chat_schedules?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        await writeAudit(`pd_chat.schedule.${auditAction[action]}`, { ...item, ...patch }, item.status, next.status, { owner:next.owner, nextAction:next.nextAction, reason:patch.last_return_reason, generatedChatId:generatedChat?.id || null });
+        showMessage(action === "generate" ? "PD Chat generated from the schedule." : `Schedule moved to ${next.status}.`, "success");
+        await loadSchedules();
+      }
+      async function init() {
+        try {
+          await ensureToken();
+          await loadOptions();
+          await loadSchedules();
+          document.querySelector("#scheduleForm").addEventListener("submit", createSchedule);
+          document.querySelector("#reloadButton").addEventListener("click", () => init().catch((error) => showMessage(error.message, "error")));
+          document.querySelector("#cadence").addEventListener("change", renderPreview);
+          document.querySelector("#startAt").addEventListener("change", renderPreview);
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      }
+      init();
+    </script>
+  </body>
+</html>

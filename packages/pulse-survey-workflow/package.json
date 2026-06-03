@@ -1,0 +1,12 @@
+{
+  "name": "@bimebazar/pulse-survey-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/pulseSurveyWorkflow.d.ts",
+      "default": "./src/pulseSurveyWorkflow.mjs"
+    }
+  }
+}

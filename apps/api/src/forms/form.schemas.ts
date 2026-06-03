@@ -226,3 +226,58 @@ export const formVersionVisibilitySchema = z.object({
     visibleToHrAdmin: z.boolean().default(true),
   }),
 });
+
+const conditionalTargetSchema = z.object({
+  questionId: z.string().min(1).max(80),
+  effect: z.enum(["show", "hide", "require", "optional"]),
+});
+
+const conditionalRuleSchema = z.object({
+  id: z.string().min(1).max(80),
+  label: z.string().min(2).max(180).optional(),
+  sourceQuestionId: z.string().min(1).max(80),
+  operator: z.enum(["equals", "not_equals", "contains", "not_contains", "is_empty", "is_not_empty", "gt", "gte", "lt", "lte"]),
+  value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]).optional(),
+  targets: z.array(conditionalTargetSchema).min(1).max(12),
+});
+
+const conditionalVisibilitySchema = z.object({
+  employeeCanView: z.boolean().default(false),
+  managerCanView: z.boolean().default(false),
+  hrbpCanView: z.boolean().default(true),
+  hrAdminCanView: z.boolean().default(true),
+});
+
+export const listConditionalLogicQuerySchema = z.object({
+  formTemplateId: z.string().uuid().optional(),
+  formTemplateVersionId: z.string().uuid().optional(),
+  status: z.enum(["draft", "submitted", "approved", "active", "returned", "visibility_changed", "archived"]).optional(),
+});
+
+export const createConditionalLogicSchema = z.object({
+  formTemplateId: z.string().uuid(),
+  formTemplateVersionId: z.string().uuid(),
+  name: z.string().min(2).max(180),
+  description: z.string().max(800).optional(),
+  rules: z.array(conditionalRuleSchema).min(1).max(40),
+  visibility: conditionalVisibilitySchema.default({ employeeCanView: false, managerCanView: false, hrbpCanView: true, hrAdminCanView: true }),
+});
+
+export const updateConditionalLogicSchema = z.object({
+  name: z.string().min(2).max(180).optional(),
+  description: z.string().max(800).nullable().optional(),
+  rules: z.array(conditionalRuleSchema).min(1).max(40).optional(),
+});
+
+export const conditionalLogicDecisionSchema = z.object({
+  reason: z.string().min(8).max(500).optional(),
+});
+
+export const conditionalLogicVisibilitySchema = z.object({
+  visibility: conditionalVisibilitySchema,
+  reason: z.string().min(8).max(500),
+});
+
+export const conditionalLogicPreviewSchema = z.object({
+  answers: z.record(z.unknown()).default({}),
+});

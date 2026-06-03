@@ -6,12 +6,24 @@ import {
   resolveDashboardView,
   transitionDashboardState,
 } from "@bimebazar/dashboard-workflow";
+import {
+  calculateTeamHealthScore,
+  getTeamHealthState,
+  teamHealthActions,
+  teamHealthStatuses,
+  transitionTeamHealthState,
+} from "@bimebazar/team-health-workflow";
 import { writeAuditEvent } from "../audit/audit.service.js";
 import type { AuthUser } from "../auth/auth.types.js";
-import { notifyDashboardChanged } from "../notifications/notification.service.js";
+import { notifyDashboardChanged, notifyTeamHealthChanged } from "../notifications/notification.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 
 const preferenceSelect = "id,user_id,role_view,status,owner_role,next_action,layout,filters,created_by,updated_by,created_at,updated_at";
+const teamHealthSelect = `
+  id,team_id,manager_id,cycle,status,owner_role,next_action,name,metrics,score,band,contributions,visibility,
+  submitted_at,approved_at,activated_at,calculated_at,returned_at,visibility_changed_at,archived_at,last_return_reason,
+  created_by,updated_by,created_at,updated_at
+`;
 
 export async function getDashboardSummary(input: { actor: AuthUser; view?: string; userId?: string }) {
   const view = input.view ?? resolveDashboardView(input.actor.roles);
@@ -77,6 +89,182 @@ export async function overrideDashboardPreference(input: {
     fromStatus: current.status,
     state,
     auditAction: "dashboard.override_approved",
+  });
+}
+
+export async function listTeamHealthScores(input: { teamId?: string; managerId?: string; status?: string; cycle?: string }) {
+  const admin = createSupabaseAdminClient();
+  let query = admin.from("team_health_scores").select(teamHealthSelect).order("updated_at", { ascending: false });
+  if (input.teamId) query = query.eq("team_id", input.teamId);
+  if (input.managerId) query = query.eq("manager_id", input.managerId);
+  if (input.status) query = query.eq("status", input.status);
+  if (input.cycle) query = query.eq("cycle", input.cycle);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function createTeamHealthScore(input: {
+  actor: AuthUser;
+  teamId: string;
+  managerId?: string;
+  cycle: string;
+  name: string;
+  metrics: Record<string, number>;
+  visibility: Record<string, unknown>;
+}) {
+  const admin = createSupabaseAdminClient();
+  const state = getTeamHealthState(teamHealthStatuses.DRAFT);
+  const result = calculateTeamHealthScore(input.metrics);
+  const { data, error } = await admin
+    .from("team_health_scores")
+    .insert({
+      team_id: input.teamId,
+      manager_id: input.managerId ?? input.actor.id,
+      cycle: input.cycle,
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      name: input.name,
+      metrics: input.metrics,
+      score: result.score,
+      band: result.band,
+      contributions: result.contributions,
+      visibility: input.visibility,
+      calculated_at: new Date().toISOString(),
+      created_by: input.actor.id,
+      updated_by: input.actor.id,
+    })
+    .select(teamHealthSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditTeamHealth(input.actor, data, "dashboard.team_health.created", null, state);
+  await notifyTeamHealth(data, state, "created");
+  return data;
+}
+
+export async function updateTeamHealthScore(input: {
+  actor: AuthUser;
+  id: string;
+  patch: { name?: string; metrics?: Record<string, number> };
+}) {
+  const current = await getTeamHealthScore(input.id);
+  const state = transitionTeamHealthState(current.status, teamHealthActions.UPDATE);
+  const metrics = input.patch.metrics ?? current.metrics;
+  const result = calculateTeamHealthScore(metrics);
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("team_health_scores")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      name: input.patch.name ?? current.name,
+      metrics,
+      score: result.score,
+      band: result.band,
+      contributions: result.contributions,
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(teamHealthSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditTeamHealth(input.actor, data, "dashboard.team_health.updated", current.status, state);
+  await notifyTeamHealth(data, state, "updated");
+  return data;
+}
+
+export async function calculateTeamHealth(input: { actor: AuthUser; id: string }) {
+  const current = await getTeamHealthScore(input.id);
+  const state = transitionTeamHealthState(current.status, teamHealthActions.CALCULATE);
+  const result = calculateTeamHealthScore(current.metrics);
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("team_health_scores")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      score: result.score,
+      band: result.band,
+      contributions: result.contributions,
+      calculated_at: new Date().toISOString(),
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(teamHealthSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditTeamHealth(input.actor, data, "dashboard.team_health.calculated", current.status, state);
+  await notifyTeamHealth(data, state, "calculated");
+  return data;
+}
+
+export async function submitTeamHealth(input: { actor: AuthUser; id: string }) {
+  return moveTeamHealth(input.actor, input.id, teamHealthActions.SUBMIT, "dashboard.team_health.submitted", {
+    submitted_at: new Date().toISOString(),
+  });
+}
+
+export async function approveTeamHealth(input: { actor: AuthUser; id: string }) {
+  return moveTeamHealth(input.actor, input.id, teamHealthActions.APPROVE, "dashboard.team_health.approved", {
+    approved_at: new Date().toISOString(),
+  });
+}
+
+export async function activateTeamHealth(input: { actor: AuthUser; id: string }) {
+  return moveTeamHealth(input.actor, input.id, teamHealthActions.ACTIVATE, "dashboard.team_health.activated", {
+    activated_at: new Date().toISOString(),
+  });
+}
+
+export async function returnTeamHealth(input: { actor: AuthUser; id: string; reason: string }) {
+  return moveTeamHealth(input.actor, input.id, teamHealthActions.RETURN, "dashboard.team_health.returned", {
+    returned_at: new Date().toISOString(),
+    last_return_reason: input.reason,
+    reason: input.reason,
+  });
+}
+
+export async function updateTeamHealthVisibility(input: {
+  actor: AuthUser;
+  id: string;
+  visibility: Record<string, unknown>;
+  reason: string;
+}) {
+  const current = await getTeamHealthScore(input.id);
+  const state = transitionTeamHealthState(current.status, teamHealthActions.OVERRIDE_VISIBILITY);
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("team_health_scores")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      visibility: input.visibility,
+      visibility_changed_at: new Date().toISOString(),
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(teamHealthSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditTeamHealth(input.actor, data, "dashboard.team_health.visibility_changed", current.status, state, {
+    reason: input.reason,
+    from: current.visibility,
+    to: input.visibility,
+  });
+  await notifyTeamHealth(data, state, "visibility_changed");
+  return data;
+}
+
+export async function archiveTeamHealth(input: { actor: AuthUser; id: string }) {
+  return moveTeamHealth(input.actor, input.id, teamHealthActions.ARCHIVE, "dashboard.team_health.archived", {
+    archived_at: new Date().toISOString(),
   });
 }
 
@@ -234,4 +422,103 @@ async function auditDashboard(
       nextAction: state.nextAction,
     },
   });
+}
+
+async function getTeamHealthScore(id: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("team_health_scores").select(teamHealthSelect).eq("id", id).single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function moveTeamHealth(
+  actor: AuthUser,
+  id: string,
+  action: string,
+  auditAction: string,
+  patch: Record<string, unknown>,
+) {
+  const current = await getTeamHealthScore(id);
+  const state = transitionTeamHealthState(current.status, action);
+  const { reason, ...dbPatch } = patch;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("team_health_scores")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      updated_by: actor.id,
+      updated_at: new Date().toISOString(),
+      ...dbPatch,
+    })
+    .eq("id", id)
+    .select(teamHealthSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditTeamHealth(actor, data, auditAction, current.status, state, {
+    reason: typeof reason === "string" ? reason : undefined,
+  });
+  await notifyTeamHealth(data, state, teamHealthActionNameFromAudit(auditAction));
+  return data;
+}
+
+async function auditTeamHealth(
+  actor: AuthUser,
+  score: { id: string; team_id: string; manager_id?: string | null; score: number; band: string },
+  action: string,
+  fromStatus: string | null,
+  state: { status: string; owner: string; nextAction: string | null },
+  metadata: Record<string, unknown> = {},
+) {
+  await writeAuditEvent({
+    actorUserId: actor.id,
+    targetUserId: score.manager_id ?? undefined,
+    action,
+    entityType: "team_health_score",
+    entityId: score.id,
+    fromStatus,
+    toStatus: state.status,
+    reason: typeof metadata.reason === "string" ? metadata.reason : undefined,
+    metadata: {
+      teamId: score.team_id,
+      managerId: score.manager_id ?? null,
+      score: score.score,
+      band: score.band,
+      owner: state.owner,
+      nextAction: state.nextAction,
+      ...metadata,
+    },
+  });
+}
+
+async function notifyTeamHealth(
+  score: { id: string; team_id: string; manager_id?: string | null; status: string; score: number; band: string },
+  state: { owner: string; nextAction: string | null },
+  action: "created" | "updated" | "calculated" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "archived",
+) {
+  await notifyTeamHealthChanged({
+    scoreId: score.id,
+    teamId: score.team_id,
+    managerId: score.manager_id ?? null,
+    status: score.status,
+    owner: state.owner,
+    nextAction: state.nextAction,
+    action,
+    score: score.score,
+    band: score.band,
+  });
+}
+
+function teamHealthActionNameFromAudit(
+  auditAction: string,
+): "created" | "updated" | "calculated" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "archived" {
+  if (auditAction.endsWith(".calculated")) return "calculated";
+  if (auditAction.endsWith(".submitted")) return "submitted";
+  if (auditAction.endsWith(".approved")) return "approved";
+  if (auditAction.endsWith(".activated")) return "activated";
+  if (auditAction.endsWith(".returned")) return "returned";
+  if (auditAction.endsWith(".visibility_changed")) return "visibility_changed";
+  if (auditAction.endsWith(".archived")) return "archived";
+  return "updated";
 }

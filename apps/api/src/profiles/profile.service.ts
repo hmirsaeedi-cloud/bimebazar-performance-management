@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
+  buildOrgChartSnapshot,
+  getProfileOrgChartState,
+  profileOrgChartActions,
+  profileOrgChartStatuses,
+  transitionProfileOrgChartState,
+} from "@bimebazar/profile-org-chart-workflow";
+import {
   getProfileExportState,
   profileExportActions,
   profileExportStatuses,
@@ -15,6 +22,7 @@ import { writeAuditEvent } from "../audit/audit.service.js";
 import { createSupabaseAdminClient } from "../supabase/client.js";
 import { notifyUserCreated } from "../notifications/notification.service.js";
 import { notifyEmployeeExportReady } from "../notifications/notification.service.js";
+import { notifyProfileOrgChartChanged } from "../notifications/notification.service.js";
 import { syncComputedManagerRole } from "../rbac/managerRole.service.js";
 import type { AuthUser } from "../auth/auth.types.js";
 
@@ -25,6 +33,12 @@ const profileSelect = `
   phone,function_lead_id,hrbp_id,preferred_calendar,preferred_locale,
   date_display_timezone,calendar_preference_status,preferred_language,
   text_direction,language_preference_status,created_at,updated_at
+`;
+
+const orgChartSelect = `
+  id,root_profile_id,status,owner_role,next_action,name,description,snapshot,layout,visibility,max_depth,
+  submitted_at,approved_at,activated_at,refreshed_at,returned_at,visibility_changed_at,archived_at,last_return_reason,
+  created_by,updated_by,created_at,updated_at
 `;
 
 interface CreateEmployeeProfileInput {
@@ -155,6 +169,182 @@ export async function getEmployeeProfile(id: string) {
   const { data, error } = await admin.from("profiles").select(profileSelect).eq("id", id).single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function listProfileOrgCharts(input: { rootProfileId?: string; status?: string }) {
+  const admin = createSupabaseAdminClient();
+  let query = admin.from("profile_org_charts").select(orgChartSelect).order("updated_at", { ascending: false });
+  if (input.rootProfileId) query = query.eq("root_profile_id", input.rootProfileId);
+  if (input.status) query = query.eq("status", input.status);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function getProfileOrgChart(id: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("profile_org_charts").select(orgChartSelect).eq("id", id).single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createProfileOrgChart(input: {
+  actor: AuthUser;
+  rootProfileId: string;
+  name: string;
+  description?: string;
+  maxDepth: number;
+  layout: "tree" | "radial" | "compact";
+  visibility: Record<string, unknown>;
+}) {
+  const admin = createSupabaseAdminClient();
+  const state = getProfileOrgChartState(profileOrgChartStatuses.DRAFT);
+  const snapshot = await buildProfileOrgChartSnapshot(input.rootProfileId, input.maxDepth);
+  const { data, error } = await admin
+    .from("profile_org_charts")
+    .insert({
+      root_profile_id: input.rootProfileId,
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      name: input.name,
+      description: input.description ?? null,
+      snapshot,
+      layout: input.layout,
+      visibility: input.visibility,
+      max_depth: input.maxDepth,
+      created_by: input.actor.id,
+      updated_by: input.actor.id,
+    })
+    .select(orgChartSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditOrgChart(input.actor, data, "profile_org_chart.created", null, state);
+  await notifyOrgChart(data, state, "created");
+  return data;
+}
+
+export async function updateProfileOrgChart(input: {
+  actor: AuthUser;
+  id: string;
+  patch: { name?: string; description?: string | null; maxDepth?: number; layout?: "tree" | "radial" | "compact" };
+}) {
+  const current = await getProfileOrgChart(input.id);
+  const state = transitionProfileOrgChartState(current.status, profileOrgChartActions.UPDATE);
+  const maxDepth = input.patch.maxDepth ?? current.max_depth ?? 3;
+  const snapshot = input.patch.maxDepth ? await buildProfileOrgChartSnapshot(current.root_profile_id, maxDepth) : current.snapshot;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("profile_org_charts")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      name: input.patch.name ?? current.name,
+      description: "description" in input.patch ? input.patch.description : current.description,
+      max_depth: maxDepth,
+      layout: input.patch.layout ?? current.layout,
+      snapshot,
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(orgChartSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditOrgChart(input.actor, data, "profile_org_chart.updated", current.status, state);
+  await notifyOrgChart(data, state, "updated");
+  return data;
+}
+
+export async function refreshProfileOrgChart(input: { actor: AuthUser; id: string }) {
+  const current = await getProfileOrgChart(input.id);
+  const state = transitionProfileOrgChartState(current.status, profileOrgChartActions.REFRESH_SNAPSHOT);
+  const snapshot = await buildProfileOrgChartSnapshot(current.root_profile_id, current.max_depth ?? 3);
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("profile_org_charts")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      snapshot,
+      refreshed_at: new Date().toISOString(),
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(orgChartSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditOrgChart(input.actor, data, "profile_org_chart.refreshed", current.status, state);
+  await notifyOrgChart(data, state, "refreshed");
+  return data;
+}
+
+export async function submitProfileOrgChart(input: { actor: AuthUser; id: string }) {
+  return moveProfileOrgChart(input.actor, input.id, profileOrgChartActions.SUBMIT, "profile_org_chart.submitted", {
+    submitted_at: new Date().toISOString(),
+  });
+}
+
+export async function approveProfileOrgChart(input: { actor: AuthUser; id: string }) {
+  return moveProfileOrgChart(input.actor, input.id, profileOrgChartActions.APPROVE, "profile_org_chart.approved", {
+    approved_at: new Date().toISOString(),
+  });
+}
+
+export async function activateProfileOrgChart(input: { actor: AuthUser; id: string }) {
+  return moveProfileOrgChart(input.actor, input.id, profileOrgChartActions.ACTIVATE, "profile_org_chart.activated", {
+    activated_at: new Date().toISOString(),
+  });
+}
+
+export async function returnProfileOrgChart(input: { actor: AuthUser; id: string; reason: string }) {
+  return moveProfileOrgChart(input.actor, input.id, profileOrgChartActions.RETURN, "profile_org_chart.returned", {
+    returned_at: new Date().toISOString(),
+    last_return_reason: input.reason,
+    reason: input.reason,
+  });
+}
+
+export async function updateProfileOrgChartVisibility(input: {
+  actor: AuthUser;
+  id: string;
+  visibility: Record<string, unknown>;
+  reason: string;
+}) {
+  const current = await getProfileOrgChart(input.id);
+  const state = transitionProfileOrgChartState(current.status, profileOrgChartActions.OVERRIDE_VISIBILITY);
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("profile_org_charts")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      visibility: input.visibility,
+      visibility_changed_at: new Date().toISOString(),
+      updated_by: input.actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select(orgChartSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditOrgChart(input.actor, data, "profile_org_chart.visibility_changed", current.status, state, {
+    reason: input.reason,
+    from: current.visibility,
+    to: input.visibility,
+  });
+  await notifyOrgChart(data, state, "visibility_changed");
+  return data;
+}
+
+export async function archiveProfileOrgChart(input: { actor: AuthUser; id: string }) {
+  return moveProfileOrgChart(input.actor, input.id, profileOrgChartActions.ARCHIVE, "profile_org_chart.archived", {
+    archived_at: new Date().toISOString(),
+  });
 }
 
 async function queryProfilesForExport(filters: {
@@ -426,6 +616,112 @@ async function assertOrgConsistency(businessUnitId: string, departmentId: string
   if (data.department_id !== departmentId || department.business_unit_id !== businessUnitId) {
     throw new Error("Team, department, and business unit do not match");
   }
+}
+
+async function buildProfileOrgChartSnapshot(rootProfileId: string, maxDepth: number) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .select("id,email,display_name,employee_id,full_name_persian,full_name_english,manager_id,level,position_title,account_status")
+    .in("account_status", ["active", "invited", "locked"])
+    .order("employee_id", { ascending: true });
+  if (error) throw new Error(error.message);
+  return buildOrgChartSnapshot(data ?? [], rootProfileId, maxDepth);
+}
+
+async function moveProfileOrgChart(
+  actor: AuthUser,
+  id: string,
+  action: string,
+  auditAction: string,
+  patch: Record<string, unknown>,
+) {
+  const current = await getProfileOrgChart(id);
+  const state = transitionProfileOrgChartState(current.status, action);
+  const { reason, ...dbPatch } = patch;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("profile_org_charts")
+    .update({
+      status: state.status,
+      owner_role: state.owner,
+      next_action: state.nextAction,
+      updated_by: actor.id,
+      updated_at: new Date().toISOString(),
+      ...dbPatch,
+    })
+    .eq("id", id)
+    .select(orgChartSelect)
+    .single();
+  if (error) throw new Error(error.message);
+  await auditOrgChart(actor, data, auditAction, current.status, state, {
+    reason: typeof reason === "string" ? reason : undefined,
+  });
+  await notifyOrgChart(data, state, orgChartActionNameFromAudit(auditAction));
+  return data;
+}
+
+async function auditOrgChart(
+  actor: AuthUser,
+  chart: {
+    id: string;
+    root_profile_id: string;
+    snapshot?: { nodes?: unknown[] } | null;
+  },
+  action: string,
+  fromStatus: string | null,
+  state: { status: string; owner: string; nextAction: string | null },
+  metadata: Record<string, unknown> = {},
+) {
+  await writeAuditEvent({
+    actorUserId: actor.id,
+    targetUserId: chart.root_profile_id,
+    action,
+    entityType: "profile_org_chart",
+    entityId: chart.id,
+    fromStatus,
+    toStatus: state.status,
+    reason: typeof metadata.reason === "string" ? metadata.reason : undefined,
+    metadata: {
+      rootProfileId: chart.root_profile_id,
+      owner: state.owner,
+      nextAction: state.nextAction,
+      nodeCount: chart.snapshot?.nodes?.length ?? 0,
+      ...metadata,
+    },
+  });
+}
+
+async function notifyOrgChart(
+  chart: {
+    id: string;
+    root_profile_id: string;
+    status: string;
+    snapshot?: { nodes?: unknown[] } | null;
+  },
+  state: { owner: string; nextAction: string | null },
+  action: "created" | "updated" | "refreshed" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "archived",
+) {
+  await notifyProfileOrgChartChanged({
+    orgChartId: chart.id,
+    rootProfileId: chart.root_profile_id,
+    status: chart.status,
+    owner: state.owner,
+    nextAction: state.nextAction,
+    action,
+    nodeCount: chart.snapshot?.nodes?.length ?? 0,
+  });
+}
+
+function orgChartActionNameFromAudit(
+  auditAction: string,
+): "created" | "updated" | "refreshed" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "archived" {
+  if (auditAction.endsWith(".submitted")) return "submitted";
+  if (auditAction.endsWith(".approved")) return "approved";
+  if (auditAction.endsWith(".activated")) return "activated";
+  if (auditAction.endsWith(".returned")) return "returned";
+  if (auditAction.endsWith(".archived")) return "archived";
+  return "updated";
 }
 
 function mapProfilePatch(patch: Record<string, unknown>) {

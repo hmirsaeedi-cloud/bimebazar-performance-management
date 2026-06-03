@@ -3,32 +3,48 @@ import { requirePermission } from "../middleware/rbac.js";
 import {
   archiveFormTemplateSchema,
   clonePresetSchema,
+  conditionalLogicDecisionSchema,
+  conditionalLogicPreviewSchema,
+  conditionalLogicVisibilitySchema,
   createFormVersionEditSchema,
+  createConditionalLogicSchema,
   createFormTemplateSchema,
   formVersionDecisionSchema,
   formVersionVisibilitySchema,
+  listConditionalLogicQuerySchema,
   listFormTemplatesQuerySchema,
   returnFormTemplateSchema,
+  updateConditionalLogicSchema,
   updateFormVersionEditSchema,
   updateFormTemplateSchema,
 } from "./form.schemas.js";
 import {
   archiveFormTemplate,
+  archiveConditionalLogic,
   archiveFormVersionEdit,
+  approveConditionalLogic,
   approveFormVersionEdit,
+  activateConditionalLogic,
   cloneFormTemplatePreset,
+  createConditionalLogic,
   createFormTemplate,
   createFormVersionEdit,
   getFormTemplate,
+  listConditionalLogic,
   listFormVersionEdits,
   listFormTemplatePresets,
   listFormTemplates,
+  previewConditionalLogic,
   publishFormVersionEdit,
   publishFormTemplate,
+  returnConditionalLogic,
   returnFormVersionEdit,
   returnFormTemplateToDraft,
   seedDefaultFormTemplates,
+  submitConditionalLogic,
   submitFormVersionEdit,
+  updateConditionalLogic,
+  updateConditionalLogicVisibility,
   updateFormVersionEdit,
   updateFormTemplate,
   updateFormVersionVisibility,
@@ -71,6 +87,92 @@ formRouter.post("/presets/:presetKey/clone", requirePermission("forms.create"), 
         ...input,
       }),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.get("/conditional-logic", requirePermission("forms.conditional_read"), async (req, res, next) => {
+  try {
+    const query = listConditionalLogicQuerySchema.parse(req.query);
+    res.json({ rules: await listConditionalLogic(query) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.post("/conditional-logic", requirePermission("forms.conditional_create"), async (req, res, next) => {
+  try {
+    const input = createConditionalLogicSchema.parse(req.body);
+    res.status(201).json({ ruleSet: await createConditionalLogic({ actor: req.user!, ...input }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.patch("/conditional-logic/:id", requirePermission("forms.conditional_update"), async (req, res, next) => {
+  try {
+    const patch = updateConditionalLogicSchema.parse(req.body);
+    res.json({ ruleSet: await updateConditionalLogic({ actor: req.user!, id: req.params.id, patch }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.post("/conditional-logic/:id/submit", requirePermission("forms.conditional_submit"), async (req, res, next) => {
+  try {
+    res.json({ ruleSet: await submitConditionalLogic({ actor: req.user!, id: req.params.id }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.post("/conditional-logic/:id/approve", requirePermission("forms.conditional_approve"), async (req, res, next) => {
+  try {
+    res.json({ ruleSet: await approveConditionalLogic({ actor: req.user!, id: req.params.id }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.post("/conditional-logic/:id/activate", requirePermission("forms.conditional_approve"), async (req, res, next) => {
+  try {
+    res.json({ ruleSet: await activateConditionalLogic({ actor: req.user!, id: req.params.id }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.post("/conditional-logic/:id/return", requirePermission("forms.conditional_return"), async (req, res, next) => {
+  try {
+    const input = conditionalLogicDecisionSchema.parse(req.body);
+    res.json({ ruleSet: await returnConditionalLogic({ actor: req.user!, id: req.params.id, reason: input.reason ?? "Returned for revision" }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.patch("/conditional-logic/:id/visibility", requirePermission("forms.conditional_override"), async (req, res, next) => {
+  try {
+    const input = conditionalLogicVisibilitySchema.parse(req.body);
+    res.json({ ruleSet: await updateConditionalLogicVisibility({ actor: req.user!, id: req.params.id, ...input }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.post("/conditional-logic/:id/archive", requirePermission("forms.conditional_archive"), async (req, res, next) => {
+  try {
+    res.json({ ruleSet: await archiveConditionalLogic({ actor: req.user!, id: req.params.id }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+formRouter.post("/conditional-logic/:id/preview", requirePermission("forms.conditional_read"), async (req, res, next) => {
+  try {
+    const input = conditionalLogicPreviewSchema.parse(req.body);
+    res.json({ result: await previewConditionalLogic({ id: req.params.id, answers: input.answers }) });
   } catch (error) {
     next(error);
   }

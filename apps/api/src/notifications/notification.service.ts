@@ -1134,6 +1134,31 @@ export async function notifyPdChatAttachmentChanged(input: {
   console.info("notification.pd_chat_attachment_changed", input);
 }
 
+export async function notifyPdChatScheduleChanged(input: {
+  scheduleId: string;
+  employeeId: string;
+  managerId?: string | null;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  nextOccurrenceAt?: string | null;
+  action:
+    | "created"
+    | "updated"
+    | "submitted"
+    | "approved"
+    | "activated"
+    | "paused"
+    | "resumed"
+    | "returned"
+    | "visibility_changed"
+    | "occurrence_generated"
+    | "archived";
+}) {
+  // S10 notifications can replace this hook with calendar/email delivery.
+  console.info("notification.pd_chat_schedule_changed", input);
+}
+
 export async function notifyComplianceAuditChanged(input: {
   exportId?: string | null;
   status: string;
@@ -1155,6 +1180,21 @@ export async function notifyDashboardChanged(input: {
 }) {
   // S5 notifications can replace this hook with in-app and email delivery.
   console.info("notification.dashboard_changed", input);
+}
+
+export async function notifyTeamHealthChanged(input: {
+  scoreId: string;
+  teamId?: string | null;
+  managerId?: string | null;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action: "created" | "updated" | "calculated" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "archived";
+  score: number;
+  band: string;
+}) {
+  // S10 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.team_health_changed", input);
 }
 
 export async function notifyReportChanged(input: {
@@ -1184,6 +1224,73 @@ export async function notifyFeedbackChanged(input: {
   console.info("notification.feedback_changed", input);
 }
 
+export async function notifyKudosFeedChanged(input: {
+  kudosId: string;
+  authorUserId: string;
+  recipientUserIds: string[];
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action: "created" | "updated" | "submitted" | "approved" | "published" | "returned" | "visibility_changed" | "archived";
+}) {
+  // S10 notifications can replace this hook with realtime feed delivery.
+  console.info("notification.kudos_feed_changed", input);
+}
+
+export async function notifyGoalChanged(input: {
+  goalId: string;
+  ownerUserId: string;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  progressPercent: number;
+  action: "created" | "updated" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "completed" | "archived";
+}) {
+  // S9 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.goal_changed", input);
+}
+
+export async function notifyFormConditionalLogicChanged(input: {
+  conditionalLogicId: string;
+  formTemplateId: string;
+  formTemplateVersionId: string;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action: "created" | "updated" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "archived";
+  ruleCount: number;
+}) {
+  // S9 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.form_conditional_logic_changed", input);
+}
+
+export async function notifyProfileOrgChartChanged(input: {
+  orgChartId: string;
+  rootProfileId: string;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action: "created" | "updated" | "refreshed" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "archived";
+  nodeCount: number;
+}) {
+  // S9 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.profile_org_chart_changed", input);
+}
+
+export async function notifyHrisIntegrationChanged(input: {
+  integrationId: string;
+  provider: string;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action: "created" | "updated" | "submitted" | "approved" | "activated" | "returned" | "visibility_changed" | "sync_started" | "sync_completed" | "sync_failed" | "archived";
+  totalRecords?: number;
+  changedRecords?: number;
+}) {
+  // S10 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.hris_integration_changed", input);
+}
+
 export async function notifyProcessFormInstanceChanged(input: {
   formInstanceId?: string;
   processId: string;
@@ -1210,6 +1317,32 @@ export async function notifyIndividualSurveyChanged(input: {
 }) {
   // S6 notifications can replace this hook with in-app and email delivery.
   console.info("notification.individual_survey_changed", input);
+}
+
+export async function notifyPulseSurveyChanged(input: {
+  pulseSurveyId: string;
+  responseId?: string;
+  status: string;
+  owner: string;
+  nextAction: string | null;
+  action:
+    | "created"
+    | "updated"
+    | "started"
+    | "submitted"
+    | "approved"
+    | "returned"
+    | "released"
+    | "completed"
+    | "cancelled"
+    | "visibility_changed";
+  eligibleEmployeeCount?: number;
+  responseCount?: number;
+  minResponses?: number;
+  canRelease?: boolean;
+}) {
+  // S10 notifications can replace this hook with in-app and email delivery.
+  console.info("notification.pulse_survey_changed", input);
 }
 
 export async function notifyPromotionChanged(input: {

@@ -1,0 +1,11 @@
+{
+  "name": "@bimebazar/goals-workflow",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/goalsWorkflow.d.ts",
+      "default": "./src/goalsWorkflow.mjs"
+    }
+  }
+}

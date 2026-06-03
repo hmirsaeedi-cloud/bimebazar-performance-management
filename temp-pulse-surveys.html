@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BimeBazar Anonymized Pulse Surveys</title>
+    <style>
+      :root { --bg:#f5f8f7; --panel:#fff; --ink:#172026; --muted:#5c6b73; --line:#d8e1e5; --teal:#087c7c; --gold:#bd7f18; --green:#2f7d49; --danger:#b33b35; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:1240px; margin:0 auto; padding:28px 18px 48px; }
+      header,.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+      h1 { margin:0 0 6px; font-size:clamp(1.8rem,4vw,3rem); }
+      h2 { margin:0 0 12px; }
+      p { margin:0; color:var(--muted); line-height:1.45; }
+      a { color:var(--teal); font-weight:800; }
+      section { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:18px; background:var(--panel); box-shadow:0 12px 34px rgba(22,40,48,.08); }
+      form { display:grid; grid-template-columns:repeat(4,minmax(160px,1fr)); gap:12px; }
+      label { display:grid; gap:6px; color:var(--muted); font-size:.82rem; font-weight:750; }
+      input,select,textarea { border:1px solid var(--line); border-radius:8px; min-height:40px; padding:8px 10px; color:var(--ink); font:inherit; background:#fff; }
+      textarea { min-height:76px; resize:vertical; }
+      button { min-height:38px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
+      button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
+      button.warning { background:var(--gold); }
+      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
+      th { color:var(--muted); font-size:.78rem; }
+      code { font-size:.76rem; word-break:break-word; }
+      .full { grid-column:1 / -1; }
+      .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
+      .pill.active,.pill.approved,.pill.released,.pill.completed { background:#e9f7ed; color:var(--green); }
+      .pill.anonymity_review,.pill.returned,.pill.visibility_changed { background:#fff1d6; color:#7a4f00; }
+      .pill.cancelled { background:#eef0f1; color:#51616a; }
+      .muted { margin-top:4px; color:var(--muted); font-size:.75rem; }
+      .actions { display:flex; flex-wrap:wrap; gap:8px; }
+      .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
+      .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
+      .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
+      .metric-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:12px; }
+      .metric { border:1px solid var(--line); border-radius:8px; padding:12px; background:#fbfdfc; }
+      .metric strong { display:block; font-size:1.5rem; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form,.metric-grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Anonymized Pulse Surveys</h1>
+          <p>Run quick anonymous checks and release only aggregate results after the minimum response guard is met.</p>
+        </div>
+        <nav><a href="/all-pages.html">All pages</a></nav>
+      </header>
+
+      <section>
+        <h2>Create Pulse</h2>
+        <form id="pulseForm">
+          <label>Form version<select id="formVersionId" required></select></label>
+          <label>Min responses<input id="minResponses" type="number" min="3" max="100" value="3" /></label>
+          <label>Target count<input id="targetCount" type="number" min="1" max="20" value="5" /></label>
+          <label>Title<input id="title" value="S10 anonymized pulse survey" required /></label>
+          <label class="full">Description<textarea id="description">Anonymous team mood and clarity pulse check.</textarea></label>
+          <button type="submit">Create pulse</button>
+          <button class="secondary" id="reloadButton" type="button">Reload</button>
+        </form>
+        <div id="message" class="message"></div>
+      </section>
+
+      <section>
+        <div class="toolbar"><div><h2>Pulse Surveys</h2><p id="countLabel">Loading...</p></div></div>
+        <table>
+          <thead><tr><th>Survey</th><th>State</th><th>Anonymity Guard</th><th>Aggregates</th><th>Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
+      const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
+      let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
+      let profiles = [];
+      let versions = [];
+      let surveys = [];
+      const rows = document.querySelector("#rows");
+      const message = document.querySelector("#message");
+      const countLabel = document.querySelector("#countLabel");
+      const states = {
+        draft:{ status:"draft", owner:"HR_ADMIN", nextAction:"configure" },
+        configured:{ status:"configured", owner:"HR_ADMIN", nextAction:"start" },
+        active:{ status:"active", owner:"EMPLOYEE", nextAction:"submit" },
+        anonymity_review:{ status:"anonymity_review", owner:"HRBP", nextAction:"approve" },
+        approved:{ status:"approved", owner:"HRBP", nextAction:"release_results" },
+        returned:{ status:"returned", owner:"HR_ADMIN", nextAction:"update" },
+        released:{ status:"released", owner:"HRBP", nextAction:"complete" },
+        completed:{ status:"completed", owner:"SYSTEM", nextAction:null },
+        visibility_changed:{ status:"visibility_changed", owner:"HRBP", nextAction:"update" },
+        cancelled:{ status:"cancelled", owner:"SYSTEM", nextAction:null },
+      };
+      function showMessage(text, type) { message.textContent = text; message.className = `message ${type}`; }
+      async function supabaseFetch(path, options = {}) {
+        const response = await fetch(`${supabaseUrl}${path}`, { ...options, headers:{ apikey:publishableKey, Authorization:`Bearer ${accessToken}`, "Content-Type":"application/json", ...(options.headers || {}) } });
+        const text = await response.text(); const data = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
+        return data;
+      }
+      async function ensureToken() {
+        if (!accessToken) {
+          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
+          const password = prompt("Enter your password");
+          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
+            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
+          });
+          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+        }
+        currentUser = await supabaseFetch("/auth/v1/user");
+      }
+      function evaluateGuard(responseCount, minResponses) {
+        return { responseCount, minResponses, canRelease:responseCount >= minResponses, missingResponses:Math.max(0, minResponses - responseCount) };
+      }
+      function aggregate(responses) {
+        const totals = {}; const counts = {};
+        responses.forEach((response) => Object.entries(response.answers || {}).forEach(([key, value]) => {
+          if (typeof value === "number") { totals[key] = (totals[key] || 0) + value; counts[key] = (counts[key] || 0) + 1; }
+        }));
+        return Object.fromEntries(Object.entries(totals).map(([key, total]) => [key, Math.round((total / counts[key]) * 10) / 10]));
+      }
+      async function hashCode(value) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+        return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      }
+      async function writeAudit(action, item, fromStatus, toStatus, metadata = {}) {
+        await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, action, entity_type:"pulse_survey_process", entity_id:item.id, from_status:fromStatus, to_status:toStatus, reason:metadata.reason || null, metadata:{ owner:metadata.owner, nextAction:metadata.nextAction, eligibleEmployeeCount:item.eligible_employee_count, minResponses:item.min_responses, responseCount:item.response_count, anonymityGuard:item.anonymity_guard, ...metadata } }) });
+      }
+      async function loadOptions() {
+        profiles = await supabaseFetch("/rest/v1/profiles?select=id,email,display_name,full_name_english,employee_id,account_status&account_status=eq.active&order=employee_id.asc");
+        versions = await supabaseFetch("/rest/v1/form_template_versions?select=id,template_id,version_number,status&order=version_number.desc");
+        document.querySelector("#formVersionId").innerHTML = versions.map((version) => `<option value="${version.id}" data-template="${version.template_id}">Version ${version.version_number} · ${version.status}</option>`).join("");
+      }
+      async function loadSurveys() {
+        surveys = await supabaseFetch("/rest/v1/pulse_survey_processes?select=*,pulse_survey_responses(id,status,answers,submitted_at)&order=updated_at.desc");
+        countLabel.textContent = `${surveys.length} pulse survey${surveys.length === 1 ? "" : "s"}`;
+        rows.innerHTML = surveys.map((item) => `<tr>
+          <td><strong>${item.title}</strong><div class="muted">${item.description || ""}</div><div class="muted"><code>${item.id}</code></div></td>
+          <td><span class="pill ${item.status}">${item.status}</span><div class="muted">${item.owner_role} / ${item.next_action || "done"}</div></td>
+          <td><strong>${item.response_count || 0}/${item.min_responses}</strong><div class="muted">${item.anonymity_guard?.canRelease ? "Safe to release" : `${item.anonymity_guard?.missingResponses || item.min_responses} more needed`}</div></td>
+          <td><code>${JSON.stringify(item.aggregate_results || {})}</code></td>
+          <td class="actions">
+            ${["draft","configured","returned","visibility_changed"].includes(item.status) ? `<button data-action="start" data-id="${item.id}">Start</button>` : ""}
+            ${["active","anonymity_review"].includes(item.status) ? `<button data-action="sample" data-id="${item.id}">Add anonymous sample</button>` : ""}
+            ${item.status === "anonymity_review" ? `<button data-action="approve" data-id="${item.id}">Approve</button><button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+            ${item.status === "approved" ? `<button data-action="release" data-id="${item.id}">Release aggregates</button>` : ""}
+            ${item.status === "released" ? `<button data-action="complete" data-id="${item.id}">Complete</button>` : ""}
+            ${!["completed","cancelled"].includes(item.status) ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button><button class="secondary" data-action="cancel" data-id="${item.id}">Cancel</button>` : ""}
+          </td>
+        </tr>`).join("");
+        document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
+      }
+      async function createPulse(event) {
+        event.preventDefault();
+        const version = versions.find((item) => item.id === document.querySelector("#formVersionId").value);
+        const targets = profiles.slice(0, Number(document.querySelector("#targetCount").value)).map((profile) => profile.id);
+        if (!targets.length) throw new Error("Processes cannot start when org filters produce zero eligible employees");
+        const minResponses = Number(document.querySelector("#minResponses").value);
+        const state = states.draft;
+        const item = { id:crypto.randomUUID(), title:document.querySelector("#title").value.trim(), description:document.querySelector("#description").value.trim(), status:state.status, owner_role:state.owner, next_action:state.nextAction, form_template_id:version.template_id, form_template_version_id:version.id, locked_form_template_version_id:version.id, target_employee_ids:targets, eligible_employee_count:targets.length, min_responses:minResponses, response_count:0, pulse_settings:{ anonymous:true, channel:"pulse", cadence:"ad_hoc" }, aggregate_results:{}, anonymity_guard:evaluateGuard(0, minResponses), visibility:{ employeeCanView:true, managerCanViewAggregates:false, hrbpCanViewAggregates:true, hrAdminCanViewAggregates:true }, created_by:currentUser.id, updated_by:currentUser.id };
+        await supabaseFetch("/rest/v1/pulse_survey_processes", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(item) });
+        await writeAudit("process.pulse.created", item, null, state.status, { owner:state.owner, nextAction:state.nextAction });
+        showMessage("Pulse survey created and audit event written.", "success");
+        await loadSurveys();
+      }
+      async function handleAction(id, action) {
+        const item = surveys.find((row) => row.id === id);
+        const patch = { updated_by:currentUser.id, updated_at:new Date().toISOString() };
+        let next = item.status;
+        if (action === "start") { next = "active"; patch.started_at = new Date().toISOString(); }
+        if (action === "sample") return addSampleResponse(item);
+        if (action === "approve") {
+          if (!item.anonymity_guard?.canRelease) throw new Error(`Need ${item.min_responses} anonymous responses before approval.`);
+          next = "approved"; patch.approved_at = new Date().toISOString();
+        }
+        if (action === "release") {
+          const responses = item.pulse_survey_responses || [];
+          const guard = evaluateGuard(responses.length, item.min_responses);
+          if (!guard.canRelease) throw new Error(`Need ${item.min_responses} anonymous responses before release.`);
+          next = "released"; patch.released_at = new Date().toISOString(); patch.aggregate_results = aggregate(responses); patch.anonymity_guard = guard; patch.response_count = responses.length;
+        }
+        if (action === "return") { next = "returned"; patch.returned_at = new Date().toISOString(); patch.last_return_reason = prompt("Reason for return", "Needs response count review.") || "Returned for revision"; }
+        if (action === "visibility") { next = "visibility_changed"; patch.visibility_changed_at = new Date().toISOString(); patch.visibility = { ...(item.visibility || {}), managerCanViewAggregates:true }; }
+        if (action === "complete") { next = "completed"; patch.completed_at = new Date().toISOString(); }
+        if (action === "cancel") { next = "cancelled"; patch.cancelled_at = new Date().toISOString(); }
+        const state = states[next];
+        patch.status = state.status; patch.owner_role = state.owner; patch.next_action = state.nextAction;
+        await supabaseFetch(`/rest/v1/pulse_survey_processes?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        await writeAudit(`process.pulse.${action === "release" ? "released" : action}`, { ...item, ...patch }, item.status, next, { owner:state.owner, nextAction:state.nextAction, reason:patch.last_return_reason });
+        showMessage(`Pulse survey moved to ${next}.`, "success");
+        await loadSurveys();
+      }
+      async function addSampleResponse(item) {
+        const count = (item.pulse_survey_responses || []).length + 1;
+        const respondentCode = await hashCode(`${item.id}:sample-${count}`);
+        const response = { id:crypto.randomUUID(), pulse_survey_id:item.id, respondent_code:respondentCode, status:"submitted", owner_role:"HRBP", next_action:"approve", answers:{ energy:Math.max(1, 6 - count), clarity:Math.min(5, 2 + count), safety:4 }, submitted_at:new Date().toISOString(), created_by:currentUser.id, updated_by:currentUser.id };
+        await supabaseFetch("/rest/v1/pulse_survey_responses", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(response) });
+        const responses = [...(item.pulse_survey_responses || []), response];
+        const guard = evaluateGuard(responses.length, item.min_responses);
+        const state = states.anonymity_review;
+        const patch = { status:state.status, owner_role:state.owner, next_action:state.nextAction, response_count:responses.length, aggregate_results:guard.canRelease ? aggregate(responses) : {}, anonymity_guard:guard, submitted_at:new Date().toISOString(), updated_by:currentUser.id, updated_at:new Date().toISOString() };
+        await supabaseFetch(`/rest/v1/pulse_survey_processes?id=eq.${item.id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
+        await writeAudit("process.pulse.submitted", { ...item, ...patch }, item.status, state.status, { owner:state.owner, nextAction:state.nextAction, responseCount:responses.length, canRelease:guard.canRelease });
+        showMessage("Anonymous sample response added.", "success");
+        await loadSurveys();
+      }
+      async function init() {
+        try {
+          await ensureToken();
+          await loadOptions();
+          await loadSurveys();
+          document.querySelector("#pulseForm").addEventListener("submit", createPulse);
+          document.querySelector("#reloadButton").addEventListener("click", () => init().catch((error) => showMessage(error.message, "error")));
+        } catch (error) {
+          showMessage(error.message, "error");
+        }
+      }
+      init();
+    </script>
+  </body>
+</html>

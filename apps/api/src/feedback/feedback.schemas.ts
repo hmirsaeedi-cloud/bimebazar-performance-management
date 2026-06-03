@@ -47,3 +47,40 @@ export const feedbackVisibilitySchema = z.object({
 export const releaseFeedbackAnonymitySchema = z.object({
   reason: z.string().min(8).max(500).default("Minimum anonymous response threshold met."),
 });
+
+export const listKudosFeedQuerySchema = z.object({
+  status: z.enum(["draft", "submitted", "approved", "published", "returned", "visibility_changed", "archived"]).optional(),
+  recipientUserId: z.string().uuid().optional(),
+  authorUserId: z.string().uuid().optional(),
+  tag: z.string().min(1).max(40).optional(),
+});
+
+export const createKudosSchema = z.object({
+  recipientUserIds: z.array(z.string().uuid()).min(1).max(10),
+  title: z.string().min(3).max(140),
+  message: z.string().min(8).max(1200),
+  tags: z.array(z.string().min(1).max(40)).max(8).default([]),
+  visibility: z.object({
+    feedCanView: z.boolean().default(true),
+    recipientCanView: z.boolean().default(true),
+    managerCanView: z.boolean().default(true),
+    hrbpCanView: z.boolean().default(true),
+  }).default({}),
+});
+
+export const updateKudosSchema = createKudosSchema.partial().extend({
+  recipientUserIds: z.array(z.string().uuid()).min(1).max(10).optional(),
+});
+
+export const kudosReturnSchema = z.object({
+  reason: z.string().min(8).max(500),
+});
+
+export const kudosVisibilitySchema = z.object({
+  visibility: z.object({
+    feedCanView: z.boolean().default(true),
+    recipientCanView: z.boolean().default(true),
+    managerCanView: z.boolean().default(true),
+    hrbpCanView: z.boolean().default(true),
+  }),
+});
