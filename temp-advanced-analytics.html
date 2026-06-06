@@ -54,6 +54,8 @@
         table { display: block; overflow-x: auto; }
       }
     </style>
+    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
   </head>
   <body>
     <main>
@@ -63,8 +65,9 @@
           <p>Trend and cohort snapshots for HRBP and HR Admin review, with explicit workflow state and audit history.</p>
         </div>
         <nav>
-          <a href="/temp-hrbp-reports.html">HRBP Reports</a>
-          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
+          <a href="/index.html">Workspace</a>
+          <a href="/temp-hrbp-reports.html" style="margin-left: 12px">HRBP Reports</a>
+          <a href="/index.html" style="margin-left: 12px">Workspace</a>
         </nav>
       </header>
 
@@ -139,19 +142,7 @@
 
       async function ensureToken() {
         if (!accessToken) {
-          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
-          const password = prompt("Enter your password");
-          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-            method: "POST",
-            headers: { apikey: publishableKey, "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-          }).then(async (response) => {
-            const body = await response.json();
-            if (!response.ok) throw new Error(body.msg || "Login failed");
-            return body;
-          });
-          accessToken = data.access_token;
-          localStorage.setItem("bb_access_token", accessToken);
+          throw new Error("Please open Login first, then return to this page.");
         }
         currentUser = await supabaseFetch("/auth/v1/user");
       }
@@ -449,5 +440,6 @@
       document.querySelector("#refreshButton").addEventListener("click", loadSnapshots);
       loadSnapshots().catch((error) => showMessage(error.message, "error"));
     </script>
+    <script src="detail-shell.js?v=flip7-system-2"></script>
   </body>
 </html>

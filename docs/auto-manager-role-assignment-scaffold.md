@@ -62,7 +62,7 @@ Every state object returns explicit `status`, `owner`, and `nextAction`.
 
 - Temporary local page: `/temp-rbac.html`.
 - It shows manager candidates, active direct report counts, computed role status, and last sync changes.
-- It is linked from `/all-pages.html` and the temporary Profiles page.
+- It is reachable from the product workspace and the temporary Profiles page.
 
 ## 5. Audit Log And Notifications Hooks
 

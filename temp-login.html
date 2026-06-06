@@ -1,18 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html dir="rtl" lang="fa">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BimeBazar Login</title>
+    <title>ورود به سیستم | BimeBazar Performance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <style>
       :root {
-        --bg: #f5f8f7;
-        --panel: #ffffff;
-        --ink: #172026;
-        --muted: #5c6b73;
-        --line: #d8e1e5;
-        --teal: #0c7c7c;
-        --danger: #b13d3a;
+        --background: #fbf9f8;
+        --surface: #ffffff;
+        --surface-soft: #f5f3f3;
+        --surface-strong: #e9e8e7;
+        --ink: #1b1c1c;
+        --muted: #5e625f;
+        --line: #d2c5ac;
+        --primary: #755b00;
+        --primary-strong: #5a4500;
+        --primary-container: #f2bf00;
+        --primary-soft: #ffdf90;
+        --on-primary-fixed: #241a00;
+        --danger: #ba1a1a;
+        --success: #24643b;
+        --success-bg: #eef9f0;
+        --shadow: 0 18px 50px rgba(55, 48, 32, 0.13);
       }
 
       * {
@@ -20,78 +32,352 @@
       }
 
       body {
-        display: grid;
         min-height: 100vh;
         margin: 0;
+        background: var(--background);
+        color: var(--ink);
+        font-family: Inter, Tahoma, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      a {
+        color: var(--primary);
+        font-weight: 800;
+        text-decoration: none;
+      }
+
+      .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+        vertical-align: middle;
+      }
+
+      .shell {
+        display: flex;
+        min-height: 100vh;
+        flex-direction: column;
+      }
+
+      header,
+      footer {
+        width: 100%;
+        border-color: var(--line);
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(12px);
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .topbar,
+      .footer-inner {
+        display: flex;
+        width: min(1280px, calc(100vw - 32px));
+        margin: 0 auto;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .topbar {
+        min-height: 64px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--primary);
+        font-size: 1.45rem;
+        font-weight: 900;
+      }
+
+      .brand-mark {
+        display: inline-grid;
+        width: 36px;
+        height: 36px;
         place-items: center;
-        background: var(--bg);
-        color: var(--ink);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        border-radius: 8px;
+        background: var(--primary-container);
+        color: var(--on-primary-fixed);
       }
 
-      main {
-        width: min(440px, calc(100vw - 32px));
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .icon-button,
+      .language-button,
+      .ghost-button {
+        min-height: 40px;
         border: 1px solid var(--line);
         border-radius: 8px;
-        padding: 28px;
-        background: var(--panel);
-        box-shadow: 0 16px 48px rgba(22, 40, 48, 0.12);
-      }
-
-      h1 {
-        margin: 0 0 8px;
-        font-size: 1.8rem;
-      }
-
-      p {
-        margin: 0 0 22px;
-        color: var(--muted);
-        line-height: 1.5;
-      }
-
-      form,
-      .stack {
-        display: grid;
-        gap: 14px;
-      }
-
-      label {
-        display: grid;
-        gap: 6px;
-        color: var(--muted);
-        font-size: 0.84rem;
-        font-weight: 750;
-      }
-
-      input {
-        height: 44px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 0 12px;
+        background: var(--surface);
         color: var(--ink);
-        font: inherit;
-      }
-
-      button {
-        min-height: 44px;
-        border: 0;
-        border-radius: 8px;
-        background: var(--teal);
-        color: #fff;
         cursor: pointer;
         font: inherit;
         font-weight: 800;
       }
 
-      button:disabled {
+      .language-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+      }
+
+      .icon-button {
+        width: 40px;
+      }
+
+      main {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+        padding: 28px 16px;
+      }
+
+      .login-frame {
+        display: grid;
+        width: min(1120px, 100%);
+        min-height: 660px;
+        grid-template-columns: minmax(0, 1.18fr) minmax(380px, 0.82fr);
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .brand-panel {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        padding: 48px;
+        background:
+          linear-gradient(135deg, rgba(242, 191, 0, 0.94), rgba(255, 223, 144, 0.92)),
+          radial-gradient(#241a00 1px, transparent 1px);
+        background-size: auto, 24px 24px;
+      }
+
+      .brand-panel::after {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), transparent 42%);
+        content: "";
+      }
+
+      .brand-copy {
+        position: relative;
+        z-index: 1;
+        width: min(520px, 100%);
+        text-align: right;
+      }
+
+      .brand-copy h1 {
+        margin: 0;
+        color: var(--on-primary-fixed);
+        font-size: clamp(2.1rem, 4.5vw, 4rem);
+        line-height: 1.12;
+      }
+
+      .brand-copy p {
+        max-width: 460px;
+        margin: 20px 0 0 auto;
+        color: var(--primary-strong);
+        font-size: 1.08rem;
+        line-height: 1.85;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 34px;
+      }
+
+      .feature-card {
+        display: grid;
+        min-height: 128px;
+        place-items: center;
+        gap: 10px;
+        border: 1px solid rgba(117, 91, 0, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--ink);
+        text-align: center;
+      }
+
+      .feature-card .material-symbols-outlined {
+        color: var(--primary);
+        font-size: 2.4rem;
+        font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 40;
+      }
+
+      .feature-card strong {
+        font-size: 1.02rem;
+      }
+
+      .form-panel {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 44px;
+        background: var(--surface);
+      }
+
+      .form-heading {
+        margin-bottom: 26px;
+        text-align: right;
+      }
+
+      .form-heading h2 {
+        margin: 0 0 8px;
+        font-size: 2rem;
+      }
+
+      .form-heading p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      form {
+        display: grid;
+        gap: 18px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      label {
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 800;
+      }
+
+      .input-wrap {
+        position: relative;
+        transition: transform 0.18s ease;
+      }
+
+      .input-wrap:focus-within {
+        transform: scale(1.01);
+      }
+
+      .input-wrap > .material-symbols-outlined {
+        position: absolute;
+        top: 50%;
+        right: 14px;
+        translate: 0 -50%;
+        color: var(--muted);
+      }
+
+      input[type="email"],
+      input[type="password"],
+      input[type="text"] {
+        width: 100%;
+        min-height: 48px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--background);
+        color: var(--ink);
+        direction: ltr;
+        font: inherit;
+        padding: 0 46px 0 44px;
+        text-align: left;
+        outline: none;
+      }
+
+      input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(117, 91, 0, 0.15);
+      }
+
+      .password-toggle {
+        position: absolute;
+        top: 50%;
+        left: 8px;
+        display: grid;
+        width: 36px;
+        height: 36px;
+        translate: 0 -50%;
+        place-items: center;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .remember-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+      }
+
+      .remember-row input {
+        width: 17px;
+        height: 17px;
+        accent-color: var(--primary);
+      }
+
+      .submit-button {
+        display: inline-flex;
+        min-height: 52px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--primary-container);
+        color: var(--on-primary-fixed);
+        cursor: pointer;
+        font: inherit;
+        font-size: 1.03rem;
+        font-weight: 900;
+        transition: filter 0.18s ease, transform 0.18s ease;
+      }
+
+      .submit-button:hover {
+        filter: brightness(0.97);
+      }
+
+      .submit-button:active {
+        transform: scale(0.98);
+      }
+
+      .submit-button:disabled {
         cursor: wait;
-        opacity: 0.65;
+        opacity: 0.7;
+      }
+
+      .arrow-icon {
+        transform: scaleX(-1);
       }
 
       .message {
         display: none;
         border-radius: 8px;
         padding: 10px 12px;
+        line-height: 1.5;
       }
 
       .message.error {
@@ -104,15 +390,54 @@
       .message.success {
         display: block;
         border: 1px solid #b8dfc2;
-        background: #eefaf1;
-        color: #245f37;
+        background: var(--success-bg);
+        color: var(--success);
+      }
+
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 24px 0 14px;
+        color: var(--muted);
+        font-size: 0.83rem;
+        font-weight: 800;
+      }
+
+      .divider::before,
+      .divider::after {
+        flex: 1;
+        height: 1px;
+        background: var(--line);
+        content: "";
+      }
+
+      .alt-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .ghost-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 12px;
+        background: var(--surface);
+      }
+
+      .request-row {
+        margin-top: 26px;
+        color: var(--muted);
+        text-align: center;
       }
 
       .profile {
         display: none;
         margin-top: 18px;
         border-top: 1px solid var(--line);
-        padding-top: 18px;
+        padding-top: 16px;
       }
 
       .profile.visible {
@@ -120,49 +445,326 @@
         gap: 8px;
       }
 
-      .row {
+      .profile-row {
         display: flex;
         justify-content: space-between;
         gap: 12px;
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 10px 12px;
+        direction: ltr;
       }
 
-      .row span {
+      .profile-row span {
         color: var(--muted);
       }
+
+      footer {
+        border-top: 1px solid var(--line);
+      }
+
+      .footer-inner {
+        min-height: 68px;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+      }
+
+      [data-lang="en"] {
+        direction: ltr;
+      }
+
+      [data-lang="en"] .brand-copy,
+      [data-lang="en"] .form-heading {
+        text-align: left;
+      }
+
+      [data-lang="en"] .brand-copy p {
+        margin-right: auto;
+        margin-left: 0;
+      }
+
+      [data-lang="en"] .input-wrap > .material-symbols-outlined {
+        right: auto;
+        left: 14px;
+      }
+
+      [data-lang="en"] input[type="email"],
+      [data-lang="en"] input[type="password"],
+      [data-lang="en"] input[type="text"] {
+        padding-right: 44px;
+        padding-left: 46px;
+      }
+
+      [data-lang="en"] .password-toggle {
+        right: 8px;
+        left: auto;
+      }
+
+      [data-lang="en"] .arrow-icon {
+        transform: none;
+      }
+
+      @media (max-width: 900px) {
+        .topbar,
+        .footer-inner {
+          width: min(100% - 24px, 1280px);
+        }
+
+        .login-frame {
+          min-height: 0;
+          grid-template-columns: 1fr;
+        }
+
+        .brand-panel {
+          min-height: 300px;
+          padding: 34px 24px;
+        }
+
+        .form-panel {
+          padding: 30px 22px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .topbar,
+        .footer-inner {
+          align-items: stretch;
+          flex-direction: column;
+          justify-content: center;
+          padding: 12px 0;
+        }
+
+        .header-actions,
+        .footer-links,
+        .alt-grid,
+        .feature-grid {
+          grid-template-columns: 1fr;
+          width: 100%;
+        }
+
+        .header-actions {
+          display: grid;
+          grid-template-columns: 1fr 40px;
+        }
+
+        .brand-panel {
+          display: none;
+        }
+
+        main {
+          padding-top: 18px;
+        }
+      }
     </style>
+    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
   </head>
-  <body>
-    <main>
-      <h1>BimeBazar Login</h1>
-      <p>Temporary local login page for the Performance Management platform.</p>
+  <body data-lang="fa">
+    <div class="shell">
+      <header>
+        <div class="topbar">
+          <a class="brand" href="/index.html" aria-label="BimeBazar">
+            <span class="brand-mark material-symbols-outlined">shield_person</span>
+            <span>BimeBazar Performance</span>
+          </a>
+          <div class="header-actions">
+            <button id="languageButton" class="language-button" type="button">
+              <span class="material-symbols-outlined">language</span>
+              <span data-i18n="languageButton">English</span>
+            </button>
+            <button class="icon-button" type="button" title="Help">
+              <span class="material-symbols-outlined">help</span>
+            </button>
+          </div>
+        </div>
+      </header>
 
-      <form id="loginForm">
-        <label>
-          Email
-          <input id="email" type="email" value="h.mirsaeedi@bimebazar.com" autocomplete="email" required />
-        </label>
-        <label>
-          Password
-          <input id="password" type="password" autocomplete="current-password" required />
-        </label>
-        <div id="message" class="message"></div>
-        <button id="submitButton" type="submit">Sign in</button>
-      </form>
+      <main>
+        <section class="login-frame" aria-label="BimeBazar login">
+          <div class="brand-panel" aria-hidden="true">
+            <div class="brand-copy">
+              <h1 data-i18n="heroTitle">پلتفرم مدیریت عملکرد بیمه‌بازار</h1>
+              <p data-i18n="heroBody">دسترسی امن به ارزیابی عملکرد، بازخورد، مسیر رشد و گزارش‌های منابع انسانی در یک محیط یکپارچه.</p>
+              <div class="feature-grid">
+                <div class="feature-card">
+                  <span class="material-symbols-outlined">security</span>
+                  <strong data-i18n="featureSecurity">امنیت پیشرفته</strong>
+                </div>
+                <div class="feature-card">
+                  <span class="material-symbols-outlined">speed</span>
+                  <strong data-i18n="featureSpeed">سرعت عملیاتی</strong>
+                </div>
+              </div>
+            </div>
+          </div>
 
-      <section id="profile" class="profile" aria-live="polite"></section>
-    </main>
+          <div class="form-panel">
+            <div class="form-heading">
+              <h2 data-i18n="loginTitle">ورود</h2>
+              <p data-i18n="loginSubtitle">برای دسترسی به حساب کاربری خود وارد شوید.</p>
+            </div>
+
+            <form id="loginForm">
+              <div class="field">
+                <label for="email" data-i18n="emailLabel">ایمیل</label>
+                <div class="input-wrap">
+                  <span class="material-symbols-outlined">mail</span>
+                  <input id="email" type="email" value="h.mirsaeedi@bimebazar.com" placeholder="name@bimebazar.com" autocomplete="email" required />
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="field-row">
+                  <label for="password" data-i18n="passwordLabel">رمز عبور</label>
+                  <a href="#" data-i18n="forgotPassword">فراموشی رمز عبور؟</a>
+                </div>
+                <div class="input-wrap">
+                  <span class="material-symbols-outlined">lock</span>
+                  <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+                  <button id="togglePassword" class="password-toggle" type="button" aria-label="Show password">
+                    <span id="togglePasswordIcon" class="material-symbols-outlined">visibility</span>
+                  </button>
+                </div>
+              </div>
+
+              <label class="remember-row" for="remember">
+                <input id="remember" type="checkbox" checked />
+                <span data-i18n="rememberMe">مرا به خاطر بسپار</span>
+              </label>
+
+              <div id="message" class="message" aria-live="polite"></div>
+
+              <button id="submitButton" class="submit-button" type="submit">
+                <span data-i18n="submitLabel">ورود به سیستم</span>
+                <span class="arrow-icon material-symbols-outlined">arrow_forward</span>
+              </button>
+            </form>
+
+            <div class="divider" data-i18n="altLabel">یا ورود با</div>
+            <div class="alt-grid">
+              <button class="ghost-button" type="button">
+                <span class="material-symbols-outlined">account_circle</span>
+                <span data-i18n="googleButton">گوگل</span>
+              </button>
+              <button class="ghost-button" type="button">
+                <span class="material-symbols-outlined">hub</span>
+                <span data-i18n="ssoButton">SSO سازمان</span>
+              </button>
+            </div>
+
+            <section id="profile" class="profile" aria-live="polite"></section>
+
+            <p class="request-row">
+              <span data-i18n="notMember">حساب ندارید؟</span>
+              <a href="/temp-profiles.html" data-i18n="requestAccess">درخواست دسترسی</a>
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div class="footer-inner">
+          <div class="footer-links">
+            <a href="#" data-i18n="helpCenter">مرکز راهنما</a>
+            <a href="#" data-i18n="terms">قوانین و مقررات</a>
+            <a href="#" data-i18n="privacy">سیاست حریم خصوصی</a>
+          </div>
+          <span data-i18n="copyright">© ۲۰۲۶ بیمه‌بازار. همه حقوق محفوظ است.</span>
+        </div>
+      </footer>
+    </div>
 
     <script>
       const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
       const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
 
+      const dictionary = {
+        fa: {
+          languageButton: "English",
+          heroTitle: "پلتفرم مدیریت عملکرد بیمه‌بازار",
+          heroBody: "دسترسی امن به ارزیابی عملکرد، بازخورد، مسیر رشد و گزارش‌های منابع انسانی در یک محیط یکپارچه.",
+          featureSecurity: "امنیت پیشرفته",
+          featureSpeed: "سرعت عملیاتی",
+          loginTitle: "ورود",
+          loginSubtitle: "برای دسترسی به حساب کاربری خود وارد شوید.",
+          emailLabel: "ایمیل",
+          passwordLabel: "رمز عبور",
+          forgotPassword: "فراموشی رمز عبور؟",
+          rememberMe: "مرا به خاطر بسپار",
+          submitLabel: "ورود به سیستم",
+          signingIn: "در حال ورود...",
+          altLabel: "یا ورود با",
+          googleButton: "گوگل",
+          ssoButton: "SSO سازمان",
+          notMember: "حساب ندارید؟",
+          requestAccess: "درخواست دسترسی",
+          helpCenter: "مرکز راهنما",
+          terms: "قوانین و مقررات",
+          privacy: "سیاست حریم خصوصی",
+          copyright: "© ۲۰۲۶ بیمه‌بازار. همه حقوق محفوظ است.",
+          success: "ورود موفق بود. اطلاعات حساب شما پایین فرم نمایش داده شد.",
+          noProfile: "ورود موفق بود، اما پروفایل پلتفرم برای این حساب پیدا نشد.",
+          error: "ورود انجام نشد.",
+          rows: { name: "نام", email: "ایمیل", role: "نقش", status: "وضعیت" },
+        },
+        en: {
+          languageButton: "فارسی",
+          heroTitle: "BimeBazar Performance Management",
+          heroBody: "Secure access to evaluations, feedback, growth paths, and HR reports in one focused workspace.",
+          featureSecurity: "Advanced security",
+          featureSpeed: "Operational speed",
+          loginTitle: "Sign In",
+          loginSubtitle: "Enter your account details to continue.",
+          emailLabel: "Email",
+          passwordLabel: "Password",
+          forgotPassword: "Forgot password?",
+          rememberMe: "Remember me",
+          submitLabel: "Sign in",
+          signingIn: "Signing in...",
+          altLabel: "Or continue with",
+          googleButton: "Google",
+          ssoButton: "Company SSO",
+          notMember: "No account?",
+          requestAccess: "Request access",
+          helpCenter: "Help center",
+          terms: "Terms",
+          privacy: "Privacy",
+          copyright: "© 2026 BimeBazar. All rights reserved.",
+          success: "Login successful. Your account details are shown below.",
+          noProfile: "Login worked, but no platform profile was found.",
+          error: "Could not sign in.",
+          rows: { name: "Name", email: "Email", role: "Role", status: "Status" },
+        },
+      };
+
       const form = document.querySelector("#loginForm");
       const message = document.querySelector("#message");
       const profile = document.querySelector("#profile");
       const submitButton = document.querySelector("#submitButton");
+      const togglePassword = document.querySelector("#togglePassword");
+      const togglePasswordIcon = document.querySelector("#togglePasswordIcon");
+      let lang = "fa";
+
+      function t(key) {
+        return dictionary[lang][key];
+      }
+
+      function applyLanguage(nextLang) {
+        lang = nextLang;
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
+        document.body.dataset.lang = lang;
+        document.querySelectorAll("[data-i18n]").forEach((node) => {
+          const key = node.dataset.i18n;
+          node.textContent = dictionary[lang][key] ?? node.textContent;
+        });
+      }
 
       function showMessage(text, type) {
         message.textContent = text;
@@ -183,16 +785,34 @@
             ...(options.headers || {}),
           },
         });
-
         const text = await response.text();
         const data = text ? JSON.parse(text) : null;
-
-        if (!response.ok) {
-          throw new Error(data?.msg || data?.message || data?.error_description || "Request failed");
-        }
-
+        if (!response.ok) throw new Error(data?.msg || data?.message || data?.error_description || "Request failed");
         return data;
       }
+
+      function renderProfile(user) {
+        const rows = t("rows");
+        profile.className = "profile visible";
+        profile.innerHTML = `
+          <div class="profile-row"><span>${rows.name}</span><strong>${user.display_name || "-"}</strong></div>
+          <div class="profile-row"><span>${rows.email}</span><strong>${user.email || "-"}</strong></div>
+          <div class="profile-row"><span>${rows.role}</span><strong>${user.role_code || "-"}</strong></div>
+          <div class="profile-row"><span>${rows.status}</span><strong>${user.account_status || "-"}</strong></div>
+          <a class="ghost-button" href="/index.html">${lang === "fa" ? "ورود به فضای کاری" : "Open workspace"}</a>
+        `;
+      }
+
+      document.querySelector("#languageButton").addEventListener("click", () => {
+        applyLanguage(lang === "fa" ? "en" : "fa");
+      });
+
+      togglePassword.addEventListener("click", () => {
+        const passwordInput = document.querySelector("#password");
+        const isPassword = passwordInput.type === "password";
+        passwordInput.type = isPassword ? "text" : "password";
+        togglePasswordIcon.textContent = isPassword ? "visibility_off" : "visibility";
+      });
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -200,45 +820,40 @@
         profile.className = "profile";
         profile.innerHTML = "";
         submitButton.disabled = true;
-        submitButton.textContent = "Signing in...";
+        submitButton.querySelector("[data-i18n='submitLabel']").textContent = t("signingIn");
 
         try {
-          const email = document.querySelector("#email").value;
+          const email = document.querySelector("#email").value.trim();
           const password = document.querySelector("#password").value;
           const session = await supabaseFetch("/auth/v1/token?grant_type=password", {
             method: "POST",
             body: JSON.stringify({ email, password }),
           });
 
+          localStorage.setItem("bb_access_token", session.access_token);
+          if (document.querySelector("#remember").checked) {
+            localStorage.setItem("bb_refresh_token", session.refresh_token || "");
+          }
+
           const rows = await supabaseFetch(
             "/rest/v1/profiles?select=id,email,display_name,employee_id,role_code,account_status&limit=1",
-            {
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
-            },
+            { headers: { Authorization: `Bearer ${session.access_token}` } },
           );
 
           const user = rows[0];
-          if (!user) {
-            throw new Error("Login worked, but no platform profile was found.");
-          }
+          if (!user) throw new Error(t("noProfile"));
 
-          showMessage("Login successful.", "success");
-          profile.className = "profile visible";
-          profile.innerHTML = `
-            <div class="row"><span>Name</span><strong>${user.display_name}</strong></div>
-            <div class="row"><span>Email</span><strong>${user.email}</strong></div>
-            <div class="row"><span>Role</span><strong>${user.role_code}</strong></div>
-            <div class="row"><span>Status</span><strong>${user.account_status}</strong></div>
-          `;
+          showMessage(t("success"), "success");
+          renderProfile(user);
         } catch (error) {
-          showMessage(error.message || "Could not sign in.", "error");
+          showMessage(error.message || t("error"), "error");
         } finally {
           submitButton.disabled = false;
-          submitButton.textContent = "Sign in";
+          submitButton.querySelector("[data-i18n='submitLabel']").textContent = t("submitLabel");
         }
       });
+
+      applyLanguage("fa");
     </script>
   </body>
 </html>

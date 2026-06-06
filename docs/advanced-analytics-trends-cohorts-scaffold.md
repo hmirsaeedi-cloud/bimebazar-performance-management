@@ -50,7 +50,7 @@ The feature reuses the reports workflow:
 - Page: `temp-advanced-analytics.html`
 - Shows create controls for title, date range, cohort key, and interval.
 - Renders KPI cards, trend bars, cohort rows, and workflow action buttons.
-- Linked from `all-pages.html`.
+- Linked from the product workspace.
 
 ## 5. Audit Log And Notifications Hooks
 

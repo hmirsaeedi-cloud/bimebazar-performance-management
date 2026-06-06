@@ -33,6 +33,8 @@
       .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
       @media (max-width:860px) { header,.toolbar { align-items:stretch; flex-direction:column; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
     </style>
+    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
   </head>
   <body>
     <main>
@@ -42,7 +44,7 @@
           <p>Checkpoint evaluation with weighted scoring hidden until manager submission.</p>
           <p class="muted">Workflow: Manager draft -> submit -> manager approve -> HRBP approve -> visibility -> complete.</p>
         </div>
-        <nav><a href="/temp-end-cycle-evaluation.html">End-cycle</a><a href="/all-pages.html" style="margin-left:12px">All pages</a></nav>
+        <nav><a href="/temp-end-cycle-evaluation.html">End-cycle</a><a href="/index.html" style="margin-left:12px">Workspace</a></nav>
       </header>
 
       <section>
@@ -89,12 +91,7 @@
       }
       async function ensureToken() {
         if (!accessToken) {
-          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
-          const password = prompt("Enter your password");
-          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, { method:"POST", headers:{ apikey:publishableKey, "Content-Type":"application/json" }, body:JSON.stringify({ email, password }) }).then(async (response) => {
-            const body = await response.json(); if (!response.ok) throw new Error(body.msg || "Login failed"); return body;
-          });
-          accessToken = data.access_token; localStorage.setItem("bb_access_token", accessToken);
+          throw new Error("Please open Login first, then return to this page.");
         }
         currentUser = await supabaseFetch("/auth/v1/user");
       }
@@ -208,5 +205,6 @@
       document.querySelector("#refreshButton").addEventListener("click", () => loadData().catch((error) => showMessage(error.message, "error")));
       (async function init() { try { await ensureToken(); await loadData(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load mid-cycle evaluations"; } })();
     </script>
+    <script src="detail-shell.js?v=flip7-system-2"></script>
   </body>
 </html>

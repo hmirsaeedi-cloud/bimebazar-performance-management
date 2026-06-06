@@ -3,58 +3,181 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BimeBazar Performance Roadmap</title>
-    <link rel="stylesheet" href="styles.css" />
+    <title>BimeBazar Performance Management</title>
+    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
   </head>
   <body>
-    <header class="app-header">
-      <div class="brand-lockup">
-        <img src="assets/roadmap-mark.svg" alt="" class="brand-mark" />
-        <div>
-          <p class="eyebrow">BimeBazar Performance Management</p>
-          <h1>Vibe-Coding Roadmap</h1>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="/index.html" aria-label="BimeBazar home">
+          <span class="brand-mark">BB</span>
+          <span>
+            <strong>BimeBazar</strong>
+            <small>Performance</small>
+          </span>
+        </a>
+
+        <nav class="nav-list" id="navList" aria-label="Workspace sections">
+          <div class="nav-group">
+            <button class="nav-item is-active" type="button" data-view="overview">Overview</button>
+          </div>
+          <div class="nav-group">
+            <button class="nav-item" type="button" data-view="people">People</button>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-profiles.html">Employees</a>
+              <a class="nav-subitem" href="/temp-bulk-import.html">Bulk import</a>
+              <a class="nav-subitem" href="/temp-employee-export.html">Export report</a>
+              <a class="nav-subitem" href="/temp-profile-org-chart.html">Org chart</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <button class="nav-item" type="button" data-view="evaluations">Evaluations</button>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-end-cycle-evaluation.html">End-cycle review</a>
+              <a class="nav-subitem" href="/temp-mid-cycle-evaluation.html">Mid-cycle review</a>
+              <a class="nav-subitem" href="/temp-side-by-side-evaluation.html">Side-by-side</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <button class="nav-item" type="button" data-view="processes">Processes</button>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-process-engine.html">Process setup</a>
+              <a class="nav-subitem" href="/temp-process-form-instances.html">Form instances</a>
+              <a class="nav-subitem" href="/temp-self-assessment.html">Self-assessment</a>
+              <a class="nav-subitem" href="/temp-pulse-surveys.html">Pulse surveys</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-form-builder.html">Forms</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-form-builder.html">Form builder</a>
+              <a class="nav-subitem" href="/temp-form-versioning.html">Form versioning</a>
+              <a class="nav-subitem" href="/temp-conditional-logic.html">Conditional logic</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <button class="nav-item" type="button" data-view="growth">Growth</button>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-goals.html">Goals</a>
+              <a class="nav-subitem" href="/temp-mpa.html">MPA</a>
+              <a class="nav-subitem" href="/temp-pip.html">PIP</a>
+              <a class="nav-subitem" href="/temp-promotion.html">Promotion</a>
+              <a class="nav-subitem" href="/temp-pd-chat.html">PD Chat</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-dashboard.html">Dashboards</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-dashboard.html">Role dashboards</a>
+              <a class="nav-subitem" href="/temp-notifications.html">Notifications</a>
+              <a class="nav-subitem" href="/temp-notification-preferences.html">Preferences</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <button class="nav-item" type="button" data-view="reports">Reports</button>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-hrbp-reports.html">HRBP reports</a>
+              <a class="nav-subitem" href="/temp-advanced-analytics.html">Advanced analytics</a>
+              <a class="nav-subitem" href="/temp-team-health.html">Team health</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <button class="nav-item" type="button" data-view="admin">Admin</button>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-rbac.html">RBAC</a>
+              <a class="nav-subitem" href="/temp-notifications.html">Notifications</a>
+              <a class="nav-subitem" href="/temp-audit-log.html">Audit log</a>
+              <a class="nav-subitem" href="/temp-rtl.html">RTL and language</a>
+            </div>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <a href="/temp-login.html">Login</a>
+          <a href="/temp-dashboard.html">Dashboard Detail</a>
+          <a href="/temp-profiles.html">People Detail</a>
         </div>
-      </div>
-      <div class="header-stats" aria-label="Roadmap summary">
-        <div><strong>10</strong><span>Sprints</span></div>
-        <div><strong>48</strong><span>Features</span></div>
-        <div><strong>5</strong><span>Phases</span></div>
-      </div>
-    </header>
+      </aside>
 
-    <main>
-      <section class="strategy-panel" aria-labelledby="strategy-title">
-        <div>
-          <h2 id="strategy-title">Build Strategy</h2>
-          <p>
-            Start with auth, profiles, RBAC, and Jalali calendar foundations. Then
-            ship the process engine, form engine, and evaluation chain before
-            adding PIP, promotion, analytics, notifications, and post-MVP depth.
-          </p>
-        </div>
-        <div class="phase-strip" id="phaseStrip" aria-label="Roadmap phases"></div>
-      </section>
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Performance Management</p>
+            <h1 id="viewTitle">Overview</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="role-picker">
+              <span>Role</span>
+              <select id="roleSelect">
+                <option value="hr_admin">HR Admin</option>
+                <option value="hrbp">HRBP</option>
+                <option value="manager">Manager</option>
+                <option value="employee">Employee</option>
+              </select>
+            </label>
+            <a class="primary-action" id="primaryAction" href="/temp-process-engine.html">New Process</a>
+          </div>
+        </header>
 
-      <section class="controls" aria-label="Roadmap filters">
-        <div class="filter-group" id="priorityFilters" aria-label="Priority filters"></div>
-        <label class="search-box">
-          <span>Search</span>
-          <input id="searchInput" type="search" placeholder="Feature, module, sprint..." />
-        </label>
-      </section>
+        <section class="summary-grid" aria-label="Performance summary">
+          <article class="metric-card">
+            <span>Active employees</span>
+            <strong>142</strong>
+            <small>6 onboarding this month</small>
+          </article>
+          <article class="metric-card">
+            <span>Cycle completion</span>
+            <strong>74%</strong>
+            <small>End-cycle review</small>
+          </article>
+          <article class="metric-card">
+            <span>Pending approvals</span>
+            <strong>18</strong>
+            <small>Needs owner action</small>
+          </article>
+          <article class="metric-card">
+            <span>Risk flags</span>
+            <strong>7</strong>
+            <small>4 PIP, 3 promotion</small>
+          </article>
+        </section>
 
-      <section class="summary-row" id="summaryRow" aria-live="polite"></section>
+        <section class="content-grid">
+          <article class="panel main-panel">
+            <div class="panel-header">
+              <div>
+                <h2 id="mainPanelTitle">Today’s Work</h2>
+                <p id="mainPanelSubtitle">Role-based priorities for the current performance cycle.</p>
+              </div>
+              <a id="mainPanelLink" href="/temp-dashboard.html">Open detail</a>
+            </div>
+            <div id="mainContent"></div>
+          </article>
 
-      <section id="roadmap" class="roadmap" aria-label="Feature roadmap"></section>
-    </main>
+          <aside class="panel side-panel">
+            <div class="panel-header compact">
+              <h2>Cycle Health</h2>
+              <a href="/temp-team-health.html">Review</a>
+            </div>
+            <div class="health-meter" aria-label="Cycle health score">
+              <span style="--value: 78%"></span>
+            </div>
+            <div class="health-score">
+              <strong>78</strong>
+              <span>Stable</span>
+            </div>
+            <ul class="quiet-list">
+              <li><span>Evaluation velocity</span><strong>On track</strong></li>
+              <li><span>Manager load</span><strong>High</strong></li>
+              <li><span>Feedback coverage</span><strong>Medium</strong></li>
+            </ul>
+          </aside>
+        </section>
 
-    <dialog id="featureDialog" class="feature-dialog">
-      <form method="dialog" class="dialog-shell">
-        <button class="icon-button dialog-close" value="close" aria-label="Close details">×</button>
-        <div id="dialogContent"></div>
-      </form>
-    </dialog>
+      </main>
+    </div>
 
-    <script src="app.js"></script>
+    <script src="sidebar-links.js?v=flip7-system-2"></script>
+    <script src="product-ui.js?v=flip7-system-2"></script>
   </body>
 </html>

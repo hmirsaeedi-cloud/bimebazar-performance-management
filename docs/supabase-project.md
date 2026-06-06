@@ -219,7 +219,7 @@ Table:
 
 Supabase migration version:
 
-- Pending apply: `advanced_analytics_trends_cohorts`
+- `20260603005143`
 
 Admin form movement is guarded by:
 

@@ -3,66 +3,219 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BimeBazar RBAC Manager Sync</title>
+    <title>BimeBazar Roles & Access</title>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <style>
       :root {
-        --bg: #f5f8f7;
-        --panel: #ffffff;
-        --ink: #172026;
-        --muted: #5c6b73;
-        --line: #d8e1e5;
-        --teal: #0c7c7c;
-        --danger: #b13d3a;
+        --background: #fbf9f8;
+        --surface: #ffffff;
+        --surface-low: #f5f3f3;
+        --surface-mid: #efeded;
+        --surface-high: #e9e8e7;
+        --ink: #1b1c1c;
+        --muted: #5f5e5e;
+        --line: #d2c5ac;
+        --outline: #807660;
+        --primary: #755b00;
+        --primary-container: #f2bf00;
+        --primary-fixed: #ffdf90;
+        --on-primary: #ffffff;
+        --on-primary-fixed: #241a00;
+        --danger: #ba1a1a;
+        --danger-bg: #ffdad6;
+        --success: #245f37;
+        --success-bg: #eefaf1;
+        --shadow: 0 14px 38px rgba(46, 39, 24, 0.1);
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        background: var(--bg);
+        background: var(--background);
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-      main { max-width: 1120px; margin: 0 auto; padding: 28px 18px 48px; }
-      header, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-      h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 3rem); }
-      h2 { margin: 0 0 12px; }
-      p { margin: 0; color: var(--muted); }
-      section {
-        margin-top: 18px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 18px;
-        background: var(--panel);
-        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
+      a { color: inherit; text-decoration: none; }
+      .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+        vertical-align: middle;
       }
-      label {
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        display: flex;
+        min-height: 64px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(251, 249, 248, 0.94);
+        padding: 0 24px;
+        backdrop-filter: blur(12px);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--primary);
+        font-size: 1.35rem;
+        font-weight: 900;
+      }
+      .brand-mark {
         display: grid;
-        gap: 6px;
-        color: var(--muted);
-        font-size: 0.82rem;
-        font-weight: 750;
-      }
-      input {
-        border: 1px solid var(--line);
+        width: 38px;
+        height: 38px;
+        place-items: center;
         border-radius: 8px;
-        padding: 10px;
-        color: var(--ink);
-        font: inherit;
+        background: var(--primary-container);
+        color: var(--on-primary-fixed);
+        font-weight: 900;
       }
-      button {
+      .top-actions { display: flex; align-items: center; gap: 12px; }
+      .icon-button {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .icon-button:hover { background: var(--surface-mid); color: var(--ink); }
+      .layout { display: flex; min-height: calc(100vh - 64px); }
+      aside {
+        position: sticky;
+        top: 64px;
+        display: flex;
+        width: 260px;
+        height: calc(100vh - 64px);
+        flex-direction: column;
+        border-right: 1px solid var(--line);
+        background: var(--surface-low);
+        padding: 24px 16px;
+      }
+      .side-title { display: flex; align-items: center; gap: 10px; margin: 0 8px 24px; }
+      .side-title strong { color: var(--primary); font-size: 1.08rem; }
+      .side-title span:last-child { display: block; color: var(--muted); font-size: 0.76rem; }
+      .nav-list, .side-footer { display: grid; gap: 6px; }
+      .side-footer { margin-top: auto; border-top: 1px solid var(--line); padding-top: 14px; }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-radius: 999px;
+        color: #4e4632;
+        padding: 11px 14px;
+        font-size: 0.86rem;
+        font-weight: 800;
+      }
+      .nav-item.active { background: var(--primary-container); color: var(--on-primary-fixed); }
+      .nav-item:hover { background: var(--surface-high); }
+      main { width: min(100%, 1280px); margin: 0 auto; padding: 28px 24px 48px; }
+      .breadcrumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 0.84rem;
+        margin-bottom: 18px;
+      }
+      .page-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 22px;
+      }
+      h1, h2, h3, p { margin: 0; }
+      h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; }
+      h2 { font-size: 1.25rem; }
+      p { color: var(--muted); line-height: 1.55; }
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+      button, .button {
         min-height: 40px;
         border: 0;
         border-radius: 8px;
-        background: var(--teal);
-        color: #fff;
         cursor: pointer;
         font: inherit;
-        font-weight: 800;
+        font-weight: 900;
+        padding: 0 14px;
       }
-      button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
-      .grid { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: end; }
-      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-      th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
-      th { color: var(--muted); font-size: 0.78rem; }
+      .button-primary { background: var(--primary-container); color: var(--on-primary-fixed); }
+      .button-secondary { border: 1px solid var(--outline); background: var(--surface); color: var(--ink); }
+      .button-danger { border: 1px solid var(--danger); background: var(--surface); color: var(--danger); }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .role-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+      .role-card { position: relative; padding: 18px; overflow: hidden; }
+      .role-card strong { display: block; margin: 12px 0 6px; font-size: 1.15rem; }
+      .role-card .material-symbols-outlined { color: var(--primary); font-size: 2rem; }
+      .active-ribbon {
+        position: absolute;
+        top: 0;
+        right: 0;
+        border-bottom-left-radius: 8px;
+        background: var(--primary-container);
+        color: var(--on-primary-fixed);
+        font-size: 0.66rem;
+        font-weight: 900;
+        padding: 4px 9px;
+        text-transform: uppercase;
+      }
+      .matrix-wrap { overflow: hidden; margin-bottom: 18px; }
+      .matrix-scroll { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border-bottom: 1px solid var(--line); padding: 14px 12px; text-align: left; vertical-align: middle; }
+      th { color: var(--muted); font-size: 0.76rem; text-transform: uppercase; }
+      .module-cell { display: flex; align-items: center; gap: 10px; font-weight: 900; }
+      .matrix-select {
+        width: 100%;
+        min-width: 130px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--ink);
+        font: inherit;
+        padding: 8px;
+        text-align: center;
+      }
+      .matrix-select:focus, .matrix-select:hover { border-color: var(--line); background: var(--surface-low); outline: 0; }
+      .full-access { color: var(--primary); font-weight: 900; }
+      .muted { color: var(--muted); }
+      .info-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .info-card { padding: 18px; }
+      .info-card.dark { background: var(--ink); color: #fff; overflow: hidden; position: relative; }
+      .info-card.dark p { color: rgba(255,255,255,.75); }
+      .info-card.dark .material-symbols-outlined { color: var(--primary-container); }
+      .sync-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) auto auto;
+        gap: 12px;
+        align-items: end;
+      }
+      label { display: grid; gap: 6px; color: var(--muted); font-size: 0.82rem; font-weight: 850; }
+      input, select {
+        width: 100%;
+        min-height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+        padding: 0 10px;
+      }
+      .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 18px 0 8px; }
       .pill {
         display: inline-flex;
         border-radius: 999px;
@@ -70,113 +223,258 @@
         background: #e8f4f2;
         color: #075b5b;
         font-size: 0.76rem;
-        font-weight: 800;
+        font-weight: 900;
       }
+      .pill.revoked { background: var(--danger-bg); color: #93000a; }
       .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
       .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
-      .message.success { display: block; border: 1px solid #b8dfc2; background: #eefaf1; color: #245f37; }
-      @media (max-width: 860px) {
-        header, .toolbar, .grid { align-items: stretch; grid-template-columns: 1fr; flex-direction: column; }
-        table { display: block; overflow-x: auto; }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: var(--success-bg); color: var(--success); }
+      .access-denied {
+        display: none;
+        min-height: calc(100vh - 64px);
+        place-items: center;
+        padding: 28px;
+        position: relative;
+        overflow: hidden;
+      }
+      .access-denied.visible { display: grid; }
+      .denied-card {
+        width: min(680px, 100%);
+        text-align: center;
+        padding: 44px;
+      }
+      .denied-icon {
+        display: inline-grid;
+        width: 90px;
+        height: 90px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface-low);
+        margin-bottom: 20px;
+      }
+      .denied-icon .material-symbols-outlined { font-size: 3rem; color: var(--muted); }
+      .app-content.hidden { display: none; }
+      @media (max-width: 980px) {
+        aside { display: none; }
+        .role-grid, .info-grid, .sync-grid { grid-template-columns: 1fr; }
+        .page-header, .toolbar, .topbar { align-items: stretch; flex-direction: column; }
+        main { padding: 18px 14px 38px; }
       }
     </style>
+    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
   </head>
   <body>
-    <main>
-      <header>
-        <div>
-          <h1>Manager Role Sync</h1>
-          <p>Temporary HR Admin page for computed MANAGER role assignment.</p>
-        </div>
-        <nav>
-          <a href="/temp-profiles.html">Profiles</a>
-          <a href="/all-pages.html" style="margin-left: 12px">All pages</a>
-        </nav>
-      </header>
+    <header class="topbar">
+      <a class="brand" href="/index.html">
+        <span class="brand-mark material-symbols-outlined">shield_person</span>
+        <span>HR Performance</span>
+      </a>
+      <div class="top-actions">
+        <button class="icon-button" type="button"><span class="material-symbols-outlined">notifications</span></button>
+        <button class="icon-button" type="button"><span class="material-symbols-outlined">help</span></button>
+        <span class="brand-mark" style="border-radius:999px;background:var(--surface-mid)">HR</span>
+      </div>
+    </header>
 
-      <section>
-        <h2>Resync Computed Roles</h2>
-        <div class="grid">
-          <label>Audit Reason<input id="reason" value="Manual HR Admin manager-role resync" /></label>
-          <button id="syncButton" type="button">Run sync</button>
-          <button class="secondary" id="refreshButton" type="button">Refresh</button>
+    <div id="accessDenied" class="access-denied">
+      <section class="denied-card card">
+        <div class="denied-icon"><span class="material-symbols-outlined">lock_person</span></div>
+        <h1>You do not have access to this page</h1>
+        <p style="max-width:480px;margin:12px auto 26px">Your current role does not include access to this area. If you believe this is an error, please contact your HR Admin.</p>
+        <div class="actions" style="justify-content:center">
+          <a class="button button-primary" href="/temp-dashboard.html"><span class="material-symbols-outlined">dashboard</span> Go to dashboard</a>
+          <a class="button button-secondary" href="/temp-notifications.html"><span class="material-symbols-outlined">contact_mail</span> Contact HR Admin</a>
         </div>
-        <div id="message" class="message"></div>
       </section>
+    </div>
 
-      <section>
-        <div class="toolbar">
+    <div id="appContent" class="layout app-content">
+      <aside>
+        <div class="side-title">
+          <span class="brand-mark">B</span>
+          <div><strong>BimeBazar</strong><span>Enterprise Suite</span></div>
+        </div>
+        <nav class="nav-list">
+          <a class="nav-item" href="/temp-dashboard.html"><span class="material-symbols-outlined">dashboard</span>Home</a>
+          <a class="nav-item" href="/temp-profiles.html"><span class="material-symbols-outlined">group</span>People</a>
+          <a class="nav-item" href="/temp-process-engine.html"><span class="material-symbols-outlined">refresh</span>Performance Cycles</a>
+          <a class="nav-item" href="/temp-end-cycle-evaluation.html"><span class="material-symbols-outlined">analytics</span>Evaluations</a>
+          <a class="nav-item" href="/temp-hrbp-reports.html"><span class="material-symbols-outlined">assessment</span>Reports</a>
+          <a class="nav-item active" href="/temp-rbac.html"><span class="material-symbols-outlined">settings</span>Administration</a>
+        </nav>
+        <div class="side-footer">
+          <a class="nav-item" href="/temp-audit-log.html"><span class="material-symbols-outlined">history</span>Audit Log</a>
+          <a class="nav-item" href="/temp-login.html"><span class="material-symbols-outlined">logout</span>Log Out</a>
+        </div>
+      </aside>
+
+      <main>
+        <nav class="breadcrumbs">
+          <span>Administration</span><span class="material-symbols-outlined">chevron_right</span>
+          <span>Access Control</span><span class="material-symbols-outlined">chevron_right</span>
+          <strong>Permission Matrix</strong>
+        </nav>
+
+        <div class="page-header">
           <div>
-            <h2>Manager Candidates</h2>
-            <p id="countLabel">Loading...</p>
+            <h1>Roles & Access Overview</h1>
+            <p style="max-width:720px">Define role-based access levels and keep computed Manager roles synchronized from active direct reports.</p>
+          </div>
+          <div class="actions">
+            <button class="button-secondary" type="button" onclick="resetMatrix()">Discard</button>
+            <button class="button-primary" type="button" onclick="saveMatrix()">Save Matrix</button>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Direct Reports</th>
-              <th>Computed Role</th>
-              <th>Changed</th>
-            </tr>
-          </thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </section>
-    </main>
 
+        <section class="role-grid">
+          <div class="role-card card">
+            <span class="material-symbols-outlined">person</span>
+            <strong>Employee</strong>
+            <p>Own profile, assigned forms, personal feedback, and visible evaluation history.</p>
+          </div>
+          <div class="role-card card">
+            <span class="active-ribbon">Computed</span>
+            <span class="material-symbols-outlined">groups</span>
+            <strong>Manager</strong>
+            <p>Direct reports, performance approvals, team analytics, and manager feedback.</p>
+          </div>
+          <div class="role-card card">
+            <span class="material-symbols-outlined">badge</span>
+            <strong>HRBP</strong>
+            <p>Assigned employee population, reports, PIP and promotion workflow support.</p>
+          </div>
+          <div class="role-card card">
+            <span class="material-symbols-outlined">admin_panel_settings</span>
+            <strong>HR Admin</strong>
+            <p>Full access to configuration, user management, overrides, and audit controls.</p>
+          </div>
+        </section>
+
+        <section class="matrix-wrap card">
+          <div class="matrix-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Module / Area</th>
+                  <th>Employee</th>
+                  <th>Manager</th>
+                  <th>HRBP</th>
+                  <th>HR Admin</th>
+                </tr>
+              </thead>
+              <tbody id="matrixRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="info-grid">
+          <div class="info-card card">
+            <h3><span class="material-symbols-outlined">info</span> What are Access Levels?</h3>
+            <p style="margin-top:10px">Own only restricts users to their own data. Team only adds direct reports. Assigned employees supports HRBP populations.</p>
+          </div>
+          <div class="info-card card">
+            <h3><span class="material-symbols-outlined">history</span> Recent Changes</h3>
+            <p id="recentChanges" style="margin-top:10px">Load candidates or save the matrix to see activity.</p>
+          </div>
+          <div class="info-card card dark">
+            <h3><span class="material-symbols-outlined">security</span> Security Audit</h3>
+            <p style="margin-top:10px">Every matrix save and manager-role sync writes an audit event for administrators.</p>
+          </div>
+        </section>
+
+        <section class="card" style="padding:18px">
+          <div class="page-header" style="margin-bottom:12px">
+            <div>
+              <h2>Computed Manager Role Sync</h2>
+              <p>Managers are auto-assigned when they have active direct reports and revoked when they no longer do.</p>
+            </div>
+          </div>
+          <div class="sync-grid">
+            <label>Audit Reason<input id="reason" value="Manual HR Admin manager-role resync" /></label>
+            <button id="syncButton" class="button-primary" type="button">Run sync</button>
+            <button id="refreshButton" class="button-secondary" type="button">Refresh</button>
+          </div>
+          <div id="message" class="message"></div>
+
+          <div class="toolbar">
+            <div>
+              <h2>Manager Candidates</h2>
+              <p id="countLabel">Loading...</p>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Direct Reports</th>
+                  <th>Computed Role</th>
+                  <th>Changed</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="sidebar-links.js?v=flip7-system-2"></script>
     <script>
       const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
       const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
       let accessToken = localStorage.getItem("bb_access_token") || "";
       let currentUser = null;
       let lastResults = new Map();
+      let matrixDirty = false;
 
       const message = document.querySelector("#message");
       const rows = document.querySelector("#rows");
       const countLabel = document.querySelector("#countLabel");
 
+      const modules = [
+        ["Profiles", "account_circle", ["Own only", "Team only", "Assigned employees", "Full access"]],
+        ["Forms", "description", ["Own only", "Team only", "Assigned employees", "Full access"]],
+        ["Processes", "account_tree", ["No access", "Team only", "Assigned employees", "Full access"]],
+        ["Evaluations", "star_rate", ["Own only", "Team only", "Assigned employees", "Full access"]],
+        ["Feedback", "chat_bubble", ["Own only", "Team only", "Assigned employees", "Full access"]],
+        ["Reports", "analytics", ["No access", "Team only", "Assigned employees", "Full access"]],
+        ["Settings", "tune", ["No access", "No access", "No access", "Full access"]],
+      ];
+      const defaults = {
+        Employee: ["Own only", "Own only", "No access", "Own only", "Own only", "No access", "No access"],
+        Manager: ["Team only", "Team only", "Team only", "Team only", "Team only", "Team only", "No access"],
+        HRBP: ["Assigned employees", "Assigned employees", "Assigned employees", "Assigned employees", "Assigned employees", "Assigned employees", "No access"],
+        "HR Admin": ["Full access", "Full access", "Full access", "Full access", "Full access", "Full access", "Full access"],
+      };
+
       function showMessage(text, type) {
         message.textContent = text;
         message.className = `message ${type}`;
       }
-
+      function showAccessDenied() {
+        document.querySelector("#appContent").classList.add("hidden");
+        document.querySelector("#accessDenied").classList.add("visible");
+      }
       async function supabaseFetch(path, options = {}) {
         const response = await fetch(`${supabaseUrl}${path}`, {
           ...options,
-          headers: {
-            apikey: publishableKey,
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-            ...(options.headers || {}),
-          },
+          headers: { apikey: publishableKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", ...(options.headers || {}) },
         });
         const text = await response.text();
         const data = text ? JSON.parse(text) : null;
         if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
         return data;
       }
-
       async function ensureToken() {
         if (!accessToken) {
-          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
-          const password = prompt("Enter your password");
-          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-            method: "POST",
-            headers: { apikey: publishableKey, "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-          }).then(async (response) => {
-            const body = await response.json();
-            if (!response.ok) throw new Error(body.msg || "Login failed");
-            return body;
-          });
-          accessToken = data.access_token;
-          localStorage.setItem("bb_access_token", accessToken);
+          throw new Error("Please open Login first, then return to this page.");
         }
         currentUser = await supabaseFetch("/auth/v1/user");
       }
-
       async function writeAudit(action, targetUserId, fromStatus, toStatus, metadata, reason) {
         await supabaseFetch("/rest/v1/audit_events", {
           method: "POST",
@@ -186,7 +484,7 @@
             target_user_id: targetUserId,
             action,
             entity_type: "profile_role",
-            entity_id: targetUserId ? `${targetUserId}:MANAGER` : "MANAGER:computed",
+            entity_id: targetUserId ? `${targetUserId}:MANAGER` : "RBAC:matrix",
             from_status: fromStatus,
             to_status: toStatus,
             reason,
@@ -194,7 +492,46 @@
           }),
         });
       }
-
+      function renderMatrix() {
+        const roles = ["Employee", "Manager", "HRBP", "HR Admin"];
+        document.querySelector("#matrixRows").innerHTML = modules.map(([module, icon], rowIndex) => `
+          <tr>
+            <td><span class="module-cell"><span class="material-symbols-outlined">${icon}</span>${module}</span></td>
+            ${roles.map((role) => {
+              const value = defaults[role][rowIndex];
+              if (role === "HR Admin") return `<td><span class="full-access">${value}</span></td>`;
+              const options = ["No access", "Own only", "Team only", "Assigned employees", "Full access"];
+              return `<td><select class="matrix-select" data-role="${role}" data-module="${module}">${options.map((option) => `<option ${option === value ? "selected" : ""}>${option}</option>`).join("")}</select></td>`;
+            }).join("")}
+          </tr>
+        `).join("");
+        document.querySelectorAll(".matrix-select").forEach((select) => {
+          select.addEventListener("change", () => {
+            matrixDirty = true;
+            document.querySelector("#recentChanges").textContent = `${select.dataset.role} ${select.dataset.module} access changed to ${select.value}.`;
+          });
+        });
+      }
+      window.resetMatrix = function resetMatrix() {
+        renderMatrix();
+        matrixDirty = false;
+        document.querySelector("#recentChanges").textContent = "Matrix reverted to scaffold defaults.";
+      };
+      window.saveMatrix = async function saveMatrix() {
+        const values = [...document.querySelectorAll(".matrix-select")].map((select) => ({
+          role: select.dataset.role,
+          module: select.dataset.module,
+          access: select.value,
+        }));
+        await writeAudit("rbac.permission_matrix_saved", null, matrixDirty ? "edited" : "unchanged", "saved", {
+          owner: "HR_ADMIN",
+          nextAction: null,
+          matrix: values,
+        }, "Manual permission matrix save");
+        matrixDirty = false;
+        document.querySelector("#recentChanges").textContent = "Permission matrix saved and audit event written.";
+        showMessage("Permission matrix saved.", "success");
+      };
       async function loadCandidates() {
         const [profiles, roleRows] = await Promise.all([
           supabaseFetch("/rest/v1/profiles?select=id,email,display_name,manager_id,account_status&order=display_name"),
@@ -209,32 +546,24 @@
         }
         const candidates = activeProfiles
           .filter((profile) => reportCounts.has(profile.id) || roleByUser.has(profile.id))
-          .map((profile) => ({
-            ...profile,
-            directReportCount: reportCounts.get(profile.id) || 0,
-            computedStatus: roleByUser.get(profile.id)?.status || "not_manager",
-            changed: lastResults.get(profile.id)?.changed,
-          }));
-
+          .map((profile) => ({ ...profile, directReportCount: reportCounts.get(profile.id) || 0, computedStatus: roleByUser.get(profile.id)?.status || "not_manager", changed: lastResults.get(profile.id)?.changed }));
         countLabel.textContent = `${candidates.length} manager candidate${candidates.length === 1 ? "" : "s"}`;
         rows.innerHTML = candidates.map((profile) => `
           <tr>
-            <td>${profile.display_name}</td>
-            <td>${profile.email}</td>
+            <td>${profile.display_name || ""}</td>
+            <td>${profile.email || ""}</td>
             <td>${profile.directReportCount}</td>
-            <td><span class="pill">${profile.computedStatus}</span></td>
+            <td><span class="pill ${profile.computedStatus === "revoked" ? "revoked" : ""}">${profile.computedStatus}</span></td>
             <td>${profile.changed === undefined ? "" : profile.changed ? "Yes" : "No"}</td>
           </tr>
         `).join("");
         return { activeProfiles, roleByUser, reportCounts };
       }
-
       async function runSync() {
         const reason = document.querySelector("#reason").value;
         const { activeProfiles, roleByUser, reportCounts } = await loadCandidates();
         const ids = new Set([...activeProfiles.map((profile) => profile.id), ...roleByUser.keys()]);
         const results = [];
-
         for (const id of ids) {
           const directReportCount = reportCounts.get(id) || 0;
           const existing = roleByUser.get(id);
@@ -244,25 +573,13 @@
             await supabaseFetch("/rest/v1/profile_roles?on_conflict=user_id,role_code,assignment_type", {
               method: "POST",
               headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-              body: JSON.stringify({
-                user_id: id,
-                role_code: "MANAGER",
-                assignment_type: "computed",
-                status: "active",
-                assigned_at: new Date().toISOString(),
-                revoked_at: null,
-                reason: "Auto-assigned because employee has active direct reports",
-              }),
+              body: JSON.stringify({ user_id: id, role_code: "MANAGER", assignment_type: "computed", status: "active", assigned_at: new Date().toISOString(), revoked_at: null, reason: "Auto-assigned because employee has active direct reports" }),
             });
           } else if (existing) {
             await supabaseFetch(`/rest/v1/profile_roles?user_id=eq.${id}&role_code=eq.MANAGER&assignment_type=eq.computed`, {
               method: "PATCH",
               headers: { Prefer: "return=minimal" },
-              body: JSON.stringify({
-                status: "revoked",
-                revoked_at: new Date().toISOString(),
-                reason: "Auto-revoked because employee has no active direct reports",
-              }),
+              body: JSON.stringify({ status: "revoked", revoked_at: new Date().toISOString(), reason: "Auto-revoked because employee has no active direct reports" }),
             });
           }
           if (changed) {
@@ -277,26 +594,22 @@
           }
           results.push({ user_id: id, status: nextStatus, direct_report_count: directReportCount, changed });
         }
-
-        await writeAudit("rbac.manager_roles_resynced", null, null, "resynced", {
-          owner: "SYSTEM",
-          nextAction: null,
-          checkedUsers: ids.size,
-          changedUsers: results.filter((result) => result.changed).length,
-        }, reason);
+        await writeAudit("rbac.manager_roles_resynced", null, null, "resynced", { owner: "SYSTEM", nextAction: null, checkedUsers: ids.size, changedUsers: results.filter((result) => result.changed).length }, reason);
         lastResults = new Map(results.map((result) => [result.user_id, result]));
-        showMessage(`Sync complete. ${results.filter((result) => result.changed).length} role change${results.filter((result) => result.changed).length === 1 ? "" : "s"}.`, "success");
+        const changedCount = results.filter((result) => result.changed).length;
+        document.querySelector("#recentChanges").textContent = `${changedCount} computed Manager role change${changedCount === 1 ? "" : "s"} after sync.`;
+        showMessage(`Sync complete. ${changedCount} role change${changedCount === 1 ? "" : "s"}.`, "success");
         await loadCandidates();
       }
-
       document.querySelector("#syncButton").addEventListener("click", () => runSync().catch((error) => showMessage(error.message, "error")));
       document.querySelector("#refreshButton").addEventListener("click", () => loadCandidates().catch((error) => showMessage(error.message, "error")));
-
+      renderMatrix();
       (async function init() {
         try {
           await ensureToken();
           await loadCandidates();
         } catch (error) {
+          showAccessDenied();
           showMessage(error.message, "error");
           countLabel.textContent = "Could not load RBAC manager candidates";
         }

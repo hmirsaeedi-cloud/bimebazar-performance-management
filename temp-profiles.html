@@ -3,247 +3,711 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BimeBazar Employee Profiles</title>
+    <title>BimeBazar Employee Profile Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <style>
       :root {
-        --bg: #f5f8f7;
-        --panel: #ffffff;
-        --ink: #172026;
-        --muted: #5c6b73;
-        --line: #d8e1e5;
-        --teal: #0c7c7c;
-        --danger: #b13d3a;
+        --background: #f4f6f7;
+        --surface: #ffffff;
+        --surface-low: #f9fbfb;
+        --surface-mid: #eef4f5;
+        --surface-high: #e8f4f2;
+        --ink: #172126;
+        --muted: #64737b;
+        --line: #dce4e7;
+        --outline: #c5d1d6;
+        --primary: #087c7c;
+        --primary-container: #e8f4f2;
+        --primary-fixed: #dff1ef;
+        --on-primary: #ffffff;
+        --on-primary-fixed: #075d5d;
+        --danger: #ba1a1a;
+        --danger-bg: #ffdad6;
+        --success: #245f37;
+        --success-bg: #eefaf1;
+        --shadow: 0 18px 48px rgba(25, 40, 48, 0.08);
       }
 
-      * {
-        box-sizing: border-box;
-      }
-
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        background: var(--bg);
+        background: var(--background);
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-
-      main {
-        max-width: 1120px;
-        margin: 0 auto;
-        padding: 28px 18px 48px;
+      a { color: inherit; text-decoration: none; }
+      .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+        vertical-align: middle;
       }
-
-      header {
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
         display: flex;
+        height: 64px;
         align-items: center;
         justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 18px;
+        gap: 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(251, 249, 248, 0.94);
+        padding: 0 24px;
+        backdrop-filter: blur(12px);
       }
-
-      h1 {
-        margin: 0 0 6px;
-        font-size: clamp(1.8rem, 4vw, 3rem);
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--primary);
+        font-size: 1.35rem;
+        font-weight: 900;
       }
-
-      p {
-        margin: 0;
-        color: var(--muted);
-      }
-
-      section {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 18px;
-        background: var(--panel);
-        box-shadow: 0 12px 36px rgba(22, 40, 48, 0.08);
-      }
-
-      .grid {
+      .brand-mark {
         display: grid;
-        grid-template-columns: repeat(4, minmax(150px, 1fr));
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--primary-container);
+        color: var(--on-primary-fixed);
+      }
+      .top-actions {
+        display: flex;
+        align-items: center;
         gap: 12px;
       }
-
-      label {
-        display: grid;
-        gap: 6px;
-        color: var(--muted);
-        font-size: 0.8rem;
-        font-weight: 750;
-      }
-
-      input,
-      select {
-        height: 40px;
+      .searchbox {
+        display: flex;
+        min-width: min(360px, 38vw);
+        align-items: center;
+        gap: 8px;
         border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 0 10px;
+        border-radius: 999px;
+        background: var(--surface-low);
+        padding: 0 12px;
+      }
+      .searchbox input {
+        width: 100%;
+        min-height: 38px;
+        border: 0;
+        background: transparent;
         color: var(--ink);
         font: inherit;
+        outline: 0;
       }
-
-      button {
+      .icon-button {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .icon-button:hover { background: var(--surface-mid); color: var(--ink); }
+      .avatar {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--primary-fixed);
+        color: var(--on-primary-fixed);
+        font-weight: 900;
+      }
+      .layout { display: flex; min-height: calc(100vh - 64px); }
+      aside {
+        position: sticky;
+        top: 64px;
+        display: flex;
+        width: 260px;
+        height: calc(100vh - 64px);
+        flex-direction: column;
+        border-right: 1px solid var(--line);
+        background: var(--surface-low);
+        padding: 24px 16px;
+      }
+      .side-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 8px 24px;
+      }
+      .side-title strong { color: var(--primary); font-size: 1.08rem; }
+      .side-title span:last-child { display: block; color: var(--muted); font-size: 0.76rem; }
+      .nav-list, .side-footer { display: grid; gap: 6px; }
+      .side-footer { margin-top: auto; border-top: 1px solid var(--line); padding-top: 14px; }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-radius: 999px;
+        color: #4e4632;
+        padding: 11px 14px;
+        font-size: 0.86rem;
+        font-weight: 800;
+      }
+      .nav-item.active { background: var(--primary-container); color: var(--on-primary-fixed); }
+      .nav-item:hover { background: var(--surface-high); }
+      .primary-side-button {
+        display: flex;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--primary);
+        color: var(--on-primary);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 900;
+        margin: 18px 0;
+      }
+      main {
+        width: min(100%, 1280px);
+        margin: 0 auto;
+        padding: 28px 24px 48px;
+      }
+      .breadcrumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 0.84rem;
+        margin-bottom: 18px;
+      }
+      .profile-hero, .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .profile-hero {
+        overflow: hidden;
+        margin-bottom: 20px;
+        padding: 26px;
+      }
+      .hero-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+      .employee-identity {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .employee-photo {
+        position: relative;
+        display: grid;
+        width: 96px;
+        height: 96px;
+        place-items: center;
+        border: 4px solid var(--primary-fixed);
+        border-radius: 24px;
+        background: linear-gradient(135deg, var(--primary-fixed), var(--surface-high));
+        color: var(--primary);
+        font-size: 2.2rem;
+        font-weight: 900;
+      }
+      .employee-photo::after {
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--surface);
+        border-radius: 999px;
+        background: #2f8b4c;
+        content: "";
+      }
+      h1, h2, h3, p { margin: 0; }
+      h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; }
+      h2 { font-size: 1.25rem; }
+      h3 { font-size: 1rem; }
+      .muted { color: var(--muted); }
+      .identity-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 18px;
+        margin-top: 8px;
+        color: var(--muted);
+      }
+      .identity-meta span { display: inline-flex; align-items: center; gap: 6px; }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 9px;
+        background: var(--surface-mid);
+        color: var(--ink);
+        font-size: 0.72rem;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+      .pill.active { background: #dcf5e4; color: #176036; border: 1px solid #b8dfc2; }
+      .pill.deactivated { background: var(--danger-bg); color: #93000a; border: 1px solid #efb3ad; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+      button, .button {
         min-height: 40px;
         border: 0;
         border-radius: 8px;
-        background: var(--teal);
-        color: #fff;
         cursor: pointer;
         font: inherit;
-        font-weight: 800;
+        font-weight: 900;
+        padding: 0 14px;
       }
-
-      button.secondary {
+      .button-primary { background: var(--primary-container); color: var(--on-primary-fixed); }
+      .button-secondary { border: 1px solid var(--outline); background: var(--surface); color: var(--ink); }
+      .button-danger { border: 1px solid var(--danger); background: var(--surface); color: var(--danger); }
+      .tabs {
+        display: flex;
+        gap: 24px;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--line);
+        margin-top: 28px;
+      }
+      .tabs button {
+        border-radius: 0;
+        background: transparent;
+        color: var(--muted);
+        padding: 0 0 12px;
+      }
+      .tabs button.active { border-bottom: 2px solid var(--primary); color: var(--primary); }
+      .content-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.8fr);
+        gap: 20px;
+      }
+      .stack { display: grid; gap: 20px; }
+      .card { padding: 20px; }
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .section-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .section-title .material-symbols-outlined { color: var(--primary); }
+      .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; }
+      .info-item span { display: block; color: var(--muted); font-size: 0.82rem; margin-bottom: 4px; }
+      .info-item strong { display: block; overflow-wrap: anywhere; }
+      .stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+      .stat {
+        min-height: 118px;
         border: 1px solid var(--line);
-        background: #fff;
-        color: var(--ink);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 16px;
       }
-
-      .toolbar {
+      .stat.primary { background: var(--primary); color: var(--on-primary); }
+      .stat strong { display: block; margin-top: 14px; font-size: 2rem; }
+      .progress { width: 100%; height: 7px; overflow: hidden; border-radius: 999px; background: rgba(0, 0, 0, 0.1); margin-top: 12px; }
+      .progress span { display: block; height: 100%; border-radius: inherit; background: var(--primary-container); }
+      .stat.primary .progress { background: rgba(255, 255, 255, 0.24); }
+      .stat.primary .progress span { background: var(--on-primary); }
+      .manager-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-radius: 8px;
+        background: var(--surface-low);
+        padding: 12px;
+      }
+      .mini-avatar {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--primary-fixed);
+        color: var(--primary);
+        font-weight: 900;
+      }
+      .directory-toolbar {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
         align-items: end;
         justify-content: space-between;
-        margin: 18px 0;
+        gap: 12px;
+        margin-bottom: 10px;
       }
-
-      .message {
-        display: none;
-        margin-top: 12px;
-        border-radius: 8px;
-        padding: 10px 12px;
-      }
-
-      .message.error {
-        display: block;
-        border: 1px solid #efb3ad;
-        background: #fff0ee;
-        color: var(--danger);
-      }
-
-      .message.success {
-        display: block;
-        border: 1px solid #b8dfc2;
-        background: #eefaf1;
-        color: #245f37;
-      }
-
-      table {
+      .directory { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 8px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 0.76rem; text-transform: uppercase; }
+      tr { cursor: pointer; }
+      tr:hover td { background: var(--surface-low); }
+      .form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+      label { display: grid; gap: 6px; color: var(--muted); font-size: 0.8rem; font-weight: 850; }
+      input, select, textarea {
         width: 100%;
-        border-collapse: collapse;
-        margin-top: 14px;
+        min-height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+        padding: 0 10px;
       }
-
-      th,
-      td {
-        border-bottom: 1px solid var(--line);
-        padding: 11px 8px;
-        text-align: left;
+      textarea { min-height: 96px; padding: 10px; resize: vertical; }
+      .message { display: none; margin-top: 12px; border-radius: 8px; padding: 10px 12px; }
+      .message.error { display: block; border: 1px solid #efb3ad; background: #fff0ee; color: var(--danger); }
+      .message.success { display: block; border: 1px solid #b8dfc2; background: var(--success-bg); color: var(--success); }
+      .modal {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        display: none;
+        place-items: center;
+        background: rgba(27, 28, 28, 0.42);
+        padding: 18px;
+        backdrop-filter: blur(4px);
       }
-
-      th {
-        color: var(--muted);
-        font-size: 0.78rem;
+      .modal.visible { display: grid; }
+      .modal-card {
+        width: min(520px, 100%);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
       }
-
-      .pill {
-        display: inline-flex;
-        border-radius: 999px;
-        padding: 4px 8px;
-        background: #e8f4f2;
-        color: #075b5b;
-        font-size: 0.76rem;
-        font-weight: 800;
+      .modal-head, .modal-body, .modal-foot { padding: 22px; }
+      .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; }
+      .warning {
+        display: flex;
+        gap: 10px;
+        border: 1px solid rgba(186, 26, 26, 0.22);
+        border-radius: 8px;
+        background: rgba(255, 218, 214, 0.34);
+        color: #93000a;
+        padding: 12px;
+        margin-bottom: 16px;
       }
-
-      @media (max-width: 860px) {
-        header,
-        .toolbar {
-          align-items: stretch;
-          flex-direction: column;
-        }
-
-        .grid {
-          grid-template-columns: 1fr;
-        }
-
-        table {
-          display: block;
-          overflow-x: auto;
-        }
+      .modal-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 8px; }
+      @media (max-width: 980px) {
+        aside { display: none; }
+        .content-grid, .stats-grid, .form-grid { grid-template-columns: 1fr; }
+        main { padding: 18px 14px 38px; }
+        .hero-row, .employee-identity { align-items: stretch; flex-direction: column; }
+        .hero-actions { justify-content: flex-start; }
+        .searchbox { min-width: 0; width: 100%; }
+        .topbar { height: auto; min-height: 64px; flex-wrap: wrap; padding: 12px; }
       }
     </style>
+    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
   </head>
   <body>
-    <main>
-      <header>
-        <div>
-          <h1>Employee Profiles</h1>
-          <p>Temporary local HR Admin screen for manual profile creation.</p>
-        </div>
-        <nav>
-          <a href="/temp-login.html">Login page</a>
-          <a href="/temp-calendar.html" style="margin-left: 12px">Calendar</a>
-          <a href="/temp-rtl.html" style="margin-left: 12px">Language</a>
-          <a href="/temp-form-builder.html" style="margin-left: 12px">Form builder</a>
-          <a href="/temp-rbac.html" style="margin-left: 12px">RBAC sync</a>
-          <a href="/temp-bulk-import.html" style="margin-left: 12px">Bulk import</a>
-          <a href="/temp-employee-export.html" style="margin-left: 12px">Export</a>
-        </nav>
-      </header>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="/index.html" aria-label="BimeBazar home">
+          <span class="brand-mark">BB</span>
+          <span>
+            <strong>BimeBazar</strong>
+            <small>Performance</small>
+          </span>
+        </a>
 
-      <section>
-        <h2>Create Profile</h2>
-        <form id="profileForm" class="grid">
-          <label>Email<input id="email" type="email" required /></label>
-          <label>Employee ID<input id="employeeId" required /></label>
-          <label>English Name<input id="fullNameEnglish" required /></label>
-          <label>Persian Name<input id="fullNamePersian" required /></label>
-          <label>Join Date (Jalali)<input id="joinDate" placeholder="1403-01-01" required /></label>
-          <label>Level<input id="level" value="L1" required /></label>
-          <label>Position Title<input id="positionTitle" required /></label>
-          <label>Phone<input id="phone" /></label>
-          <label>Business Unit<select id="businessUnitId" required></select></label>
-          <label>Department<select id="departmentId" required></select></label>
-          <label>Team<select id="teamId" required></select></label>
-          <label>Manager<select id="managerId"></select></label>
-          <button type="submit">Create employee</button>
-          <button class="secondary" id="refreshButton" type="button">Refresh list</button>
-        </form>
-        <div id="message" class="message"></div>
-      </section>
-
-      <section style="margin-top: 18px">
-        <div class="toolbar">
-          <div>
-            <h2>Profiles</h2>
-            <p id="countLabel">Loading...</p>
+        <nav class="nav-list" aria-label="Workspace sections">
+          <div class="nav-group"><a class="nav-item" href="/index.html">Overview</a></div>
+          <div class="nav-group">
+            <a class="nav-item is-active" href="/temp-profiles.html">People</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem is-active" href="/temp-profiles.html">Employees</a>
+              <a class="nav-subitem" href="/temp-bulk-import.html">Bulk import</a>
+              <a class="nav-subitem" href="/temp-employee-export.html">Export report</a>
+              <a class="nav-subitem" href="/temp-profile-org-chart.html">Org chart</a>
+            </div>
           </div>
-          <label>Search<input id="search" placeholder="Name, email, employee ID" /></label>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Employee ID</th>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Level</th>
-              <th>Join Date</th>
-              <th>Title</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </section>
-    </main>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-end-cycle-evaluation.html">Evaluations</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-end-cycle-evaluation.html">End-cycle review</a>
+              <a class="nav-subitem" href="/temp-mid-cycle-evaluation.html">Mid-cycle review</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-process-engine.html">Processes</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-process-engine.html">Process setup</a>
+              <a class="nav-subitem" href="/temp-process-form-instances.html">Form instances</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-form-builder.html">Forms</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-form-builder.html">Form builder</a>
+              <a class="nav-subitem" href="/temp-form-versioning.html">Form versioning</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-goals.html">Growth</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-goals.html">Goals</a>
+              <a class="nav-subitem" href="/temp-pip.html">PIP</a>
+              <a class="nav-subitem" href="/temp-promotion.html">Promotion</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-dashboard.html">Dashboards</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-dashboard.html">Role dashboards</a>
+              <a class="nav-subitem" href="/temp-notifications.html">Notifications</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-advanced-analytics.html">Reports</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-hrbp-reports.html">HRBP reports</a>
+              <a class="nav-subitem" href="/temp-advanced-analytics.html">Advanced analytics</a>
+            </div>
+          </div>
+          <div class="nav-group">
+            <a class="nav-item" href="/temp-rbac.html">Admin</a>
+            <div class="nav-submenu">
+              <a class="nav-subitem" href="/temp-rbac.html">RBAC</a>
+              <a class="nav-subitem" href="/temp-audit-log.html">Audit log</a>
+            </div>
+          </div>
+        </nav>
 
+        <div class="sidebar-footer">
+          <a href="/temp-login.html">Login</a>
+          <a href="/temp-dashboard.html">Dashboard Detail</a>
+          <a class="is-active" href="/temp-profiles.html">People Detail</a>
+        </div>
+      </aside>
+
+      <main class="workspace people-workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">People</p>
+            <h1>Employee Profiles</h1>
+            <p>Manual employee profile management, reporting lines, roles, and audit-backed updates.</p>
+          </div>
+          <div class="topbar-actions">
+            <div class="searchbox">
+              <span class="material-symbols-outlined">search</span>
+              <input id="globalSearch" placeholder="Search employees..." />
+            </div>
+            <a class="primary-action" href="/temp-bulk-import.html">Bulk Import</a>
+          </div>
+        </header>
+        <nav class="breadcrumbs">
+          <span>People</span>
+          <span class="material-symbols-outlined">chevron_right</span>
+          <span>Employees</span>
+          <span class="material-symbols-outlined">chevron_right</span>
+          <strong id="crumbName">Loading...</strong>
+        </nav>
+
+        <section class="profile-hero">
+          <div class="hero-row">
+            <div class="employee-identity">
+              <div id="heroInitials" class="employee-photo">BB</div>
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <h1 id="heroName">Employee Profile</h1>
+                  <span id="heroStatus" class="pill">loading</span>
+                </div>
+                <p id="heroTitle" class="muted" style="margin-top:6px">Select an employee from the directory</p>
+                <div class="identity-meta">
+                  <span><span class="material-symbols-outlined">badge</span><span id="heroEmployeeId">-</span></span>
+                  <span><span class="material-symbols-outlined">calendar_today</span><span id="heroJoinDate">-</span></span>
+                  <span><span class="material-symbols-outlined">language</span><span id="heroLocale">fa-IR · Jalali</span></span>
+                </div>
+              </div>
+            </div>
+            <div class="hero-actions">
+              <button class="button-secondary" type="button" onclick="fillFormFromSelected()"><span class="material-symbols-outlined">edit</span> Edit Profile</button>
+              <a class="button button-secondary" href="/temp-profile-org-chart.html"><span class="material-symbols-outlined">account_tree</span> Org Chart</a>
+              <button class="button-danger" type="button" onclick="openDeactivateModal()"><span class="material-symbols-outlined">person_off</span> Deactivate</button>
+            </div>
+          </div>
+          <div class="tabs">
+            <button class="active" type="button">Overview</button>
+            <button type="button">Personal</button>
+            <button type="button">Organization</button>
+            <button type="button">Reporting</button>
+            <button type="button">Activity History</button>
+          </div>
+        </section>
+
+        <div class="stats-grid">
+          <div class="stat">
+            <span class="muted">Active profiles</span>
+            <strong id="activeCount">0</strong>
+            <div class="progress"><span id="activeProgress" style="width:0%"></span></div>
+          </div>
+          <div class="stat primary">
+            <span>Total employees</span>
+            <strong id="totalCount">0</strong>
+            <div class="progress"><span style="width:100%"></span></div>
+          </div>
+          <div class="stat">
+            <span class="muted">Managers</span>
+            <strong id="managerCount">0</strong>
+            <div class="progress"><span id="managerProgress" style="width:0%"></span></div>
+          </div>
+        </div>
+
+        <div class="content-grid">
+          <div class="stack">
+            <section class="card">
+              <div class="section-head">
+                <h2 class="section-title"><span class="material-symbols-outlined">badge</span>Work Details</h2>
+                <span class="muted">Manual CRUD scaffold</span>
+              </div>
+              <div class="info-grid">
+                <div class="info-item"><span>Email</span><strong id="detailEmail">-</strong></div>
+                <div class="info-item"><span>Level</span><strong id="detailLevel">-</strong></div>
+                <div class="info-item"><span>Position</span><strong id="detailPosition">-</strong></div>
+                <div class="info-item"><span>Phone</span><strong id="detailPhone">-</strong></div>
+                <div class="info-item"><span>Join Date</span><strong id="detailJoin">-</strong></div>
+                <div class="info-item"><span>Locale</span><strong id="detailLocale">-</strong></div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="section-head">
+                <h2 class="section-title"><span class="material-symbols-outlined">person_add</span>Create Or Update Employee</h2>
+                <button id="refreshButton" class="button-secondary" type="button">Refresh list</button>
+              </div>
+              <form id="profileForm" class="form-grid">
+                <input id="editingId" type="hidden" />
+                <label>Email<input id="email" type="email" required /></label>
+                <label>Employee ID<input id="employeeId" required /></label>
+                <label>English Name<input id="fullNameEnglish" required /></label>
+                <label>Persian Name<input id="fullNamePersian" required /></label>
+                <label>Join Date (Jalali)<input id="joinDate" placeholder="1403-01-01" required /></label>
+                <label>Level<input id="level" value="L1" required /></label>
+                <label>Position Title<input id="positionTitle" required /></label>
+                <label>Phone<input id="phone" /></label>
+                <label>Business Unit<select id="businessUnitId" required></select></label>
+                <label>Department<select id="departmentId" required></select></label>
+                <label>Team<select id="teamId" required></select></label>
+                <label>Manager<select id="managerId"></select></label>
+                <button id="submitProfileButton" class="button-primary" type="submit">Create employee</button>
+                <button id="clearFormButton" class="button-secondary" type="button">Clear form</button>
+              </form>
+              <div id="message" class="message"></div>
+            </section>
+
+            <section class="card">
+              <div class="directory-toolbar">
+                <div>
+                  <h2 class="section-title"><span class="material-symbols-outlined">groups</span>Employee Directory</h2>
+                  <p id="countLabel" class="muted">Loading...</p>
+                </div>
+                <label style="min-width:260px">Search<input id="search" placeholder="Name, email, employee ID" /></label>
+              </div>
+              <div class="directory">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Employee ID</th>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Level</th>
+                      <th>Join Date</th>
+                      <th>Title</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rows"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div class="stack">
+            <section class="card">
+              <h2 class="section-title"><span class="material-symbols-outlined">account_tree</span>Reporting Line</h2>
+              <div class="manager-card" style="margin-top:16px">
+                <span id="managerInitials" class="mini-avatar">-</span>
+                <div>
+                  <strong id="managerName">No manager selected</strong>
+                  <p class="muted">Direct Manager</p>
+                </div>
+              </div>
+              <div class="manager-card" style="margin-top:12px">
+                <span class="mini-avatar">HR</span>
+                <div>
+                  <strong>HRBP review</strong>
+                  <p class="muted">Visibility and audit owner</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <h2 class="section-title"><span class="material-symbols-outlined">history</span>Profile Activity</h2>
+              <div id="activityList" style="display:grid;gap:12px;margin-top:16px"></div>
+            </section>
+
+            <section class="card">
+              <h2 class="section-title"><span class="material-symbols-outlined">verified_user</span>Acceptance Criteria</h2>
+              <div style="display:grid;gap:10px;margin-top:14px">
+                <span class="pill active">RBAC protected by Supabase session</span>
+                <span class="pill active">Create/update/deactivate writes audit event</span>
+                <span class="pill active">Active status controls recipient eligibility</span>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="deactivateModal" class="modal">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="brand-mark material-symbols-outlined" style="background:var(--danger-bg);color:var(--danger)">person_off</span>
+            <h2>Deactivate Employee</h2>
+          </div>
+          <button class="icon-button" type="button" onclick="closeDeactivateModal()"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="modal-body">
+          <div class="warning">
+            <span class="material-symbols-outlined">warning</span>
+            <p>This employee will no longer appear in new process eligibility or recipient search. Previous evaluation data stays archived.</p>
+          </div>
+          <div class="manager-card" style="margin-bottom:16px">
+            <span id="deactivateInitials" class="mini-avatar">-</span>
+            <div>
+              <strong id="deactivateName">No employee selected</strong>
+              <p id="deactivateTitle" class="muted">-</p>
+            </div>
+          </div>
+          <label>Reason for deactivation<textarea id="deactivationReason" placeholder="e.g. Voluntary resignation, end of contract..." required></textarea></label>
+          <p class="muted" style="margin-top:8px;font-size:.8rem">This reason will be written to the audit log.</p>
+        </div>
+        <div class="modal-foot">
+          <button class="button-danger" type="button" onclick="deactivateSelectedProfile()">Deactivate Employee</button>
+          <button class="button-secondary" type="button" onclick="closeDeactivateModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="sidebar-links.js?v=flip7-system-2"></script>
     <script>
       const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
       const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
       let accessToken = localStorage.getItem("bb_access_token") || "";
+      let currentUser = null;
       let orgUnits = { businessUnits: [], departments: [], teams: [] };
+      let profiles = [];
+      let selectedProfile = null;
 
       const message = document.querySelector("#message");
       const rows = document.querySelector("#rows");
@@ -255,17 +719,12 @@
       const pad2 = (value) => String(value).padStart(2, "0");
 
       function jalCal(jy) {
-        let leapJ = -14;
-        let jp = jalaliBreaks[0];
-        let jm = 0;
-        let jump = 0;
+        let leapJ = -14, jp = jalaliBreaks[0], jm = 0, jump = 0;
         if (jy < jp || jy >= jalaliBreaks[jalaliBreaks.length - 1]) throw new Error("Jalali year is out of supported range");
         for (let i = 1; i < jalaliBreaks.length; i += 1) {
-          jm = jalaliBreaks[i];
-          jump = jm - jp;
+          jm = jalaliBreaks[i]; jump = jm - jp;
           if (jy < jm) break;
-          leapJ += div(jump, 33) * 8 + div(mod(jump, 33), 4);
-          jp = jm;
+          leapJ += div(jump, 33) * 8 + div(mod(jump, 33), 4); jp = jm;
         }
         let n = jy - jp;
         leapJ += div(n, 33) * 8 + div(mod(n, 33) + 3, 4);
@@ -278,12 +737,10 @@
         if (leap === -1) leap = 4;
         return { leap, gy, march };
       }
-
       function g2d(gy, gm, gd) {
         let d = div((gy + div(gm - 8, 6) + 100100) * 1461, 4) + div(153 * mod(gm + 9, 12) + 2, 5) + gd - 34840408;
         return d - div(div(gy + 100100 + div(gm - 8, 6), 100) * 3, 4) + 752;
       }
-
       function d2g(jdn) {
         let j = 4 * jdn + 139361631;
         j = j + div(div(4 * jdn + 183187720, 146097) * 3, 4) * 4 - 3908;
@@ -293,12 +750,10 @@
         const gy = div(j, 1461) - 100100 + div(8 - gm, 6);
         return { gy, gm, gd };
       }
-
       function j2d(jy, jm, jd) {
         const r = jalCal(jy);
         return g2d(r.gy, 3, r.march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1;
       }
-
       function d2j(jdn) {
         const gy = d2g(jdn).gy;
         let jy = gy - 621;
@@ -309,25 +764,19 @@
           if (k <= 185) return { jy, jm: 1 + div(k, 31), jd: mod(k, 31) + 1 };
           k -= 186;
         } else {
-          jy -= 1;
-          k += 179;
-          if (r.leap === 1) k += 1;
+          jy -= 1; k += 179; if (r.leap === 1) k += 1;
         }
         return { jy, jm: 7 + div(k, 30), jd: mod(k, 30) + 1 };
       }
-
       function jalaliToIsoDate(value) {
         const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
         if (!match) throw new Error("Join date must look like 1403-01-01");
-        const jy = Number(match[1]);
-        const jm = Number(match[2]);
-        const jd = Number(match[3]);
+        const jy = Number(match[1]), jm = Number(match[2]), jd = Number(match[3]);
         const maxDay = jm <= 6 ? 31 : jm <= 11 ? 30 : jalCal(jy).leap === 0 ? 30 : 29;
         if (jm < 1 || jm > 12 || jd < 1 || jd > maxDay) throw new Error("Join date is not a valid Jalali date");
         const g = d2g(j2d(jy, jm, jd));
         return `${g.gy}-${pad2(g.gm)}-${pad2(g.gd)}`;
       }
-
       function isoDateToJalali(value) {
         if (!value) return "";
         const [gy, gm, gd] = value.split("-").map(Number);
@@ -335,50 +784,34 @@
         return `${j.jy}-${pad2(j.jm)}-${pad2(j.jd)}`;
       }
 
+      function initials(name) {
+        const parts = String(name || "BB").trim().split(/\s+/).filter(Boolean);
+        return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BB";
+      }
       function showMessage(text, type) {
         message.textContent = text;
         message.className = `message ${type}`;
       }
-
       async function supabaseFetch(path, options = {}) {
         const response = await fetch(`${supabaseUrl}${path}`, {
           ...options,
-          headers: {
-            apikey: publishableKey,
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-            ...(options.headers || {}),
-          },
+          headers: { apikey: publishableKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", ...(options.headers || {}) },
         });
         const text = await response.text();
         const data = text ? JSON.parse(text) : null;
-        if (!response.ok) {
-          throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
-        }
+        if (!response.ok) throw new Error(data?.message || data?.msg || data?.hint || "Request failed");
         return data;
       }
-
       async function ensureToken() {
-        if (accessToken) return;
-        const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
-        const password = prompt("Enter your password");
-        const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-          method: "POST",
-          headers: { apikey: publishableKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        }).then(async (response) => {
-          const body = await response.json();
-          if (!response.ok) throw new Error(body.msg || "Login failed");
-          return body;
-        });
-        accessToken = data.access_token;
-        localStorage.setItem("bb_access_token", accessToken);
+        if (accessToken) {
+          currentUser = await supabaseFetch("/auth/v1/user");
+          return;
+        }
+        throw new Error("Please open Login first, then return to this page.");
       }
-
       function fillSelect(select, options, label, valueKey = "id") {
         select.innerHTML = `<option value="">${label}</option>` + options.map((item) => `<option value="${item[valueKey]}">${item.name || item.display_name || item.email}</option>`).join("");
       }
-
       async function loadOrgUnits() {
         const [businessUnits, departments, teams] = await Promise.all([
           supabaseFetch("/rest/v1/business_units?select=id,name&order=name"),
@@ -390,42 +823,157 @@
         fillSelect(document.querySelector("#departmentId"), departments, "Select department");
         fillSelect(document.querySelector("#teamId"), teams, "Select team");
       }
-
+      async function writeAudit(action, target, fromStatus, toStatus, reason, metadata = {}) {
+        if (!currentUser?.id) return;
+        await supabaseFetch("/rest/v1/audit_events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            actor_user_id: currentUser.id,
+            target_user_id: target.id,
+            action,
+            entity_type: "profile",
+            entity_id: target.id,
+            from_status: fromStatus,
+            to_status: toStatus,
+            reason,
+            metadata: { employeeId: target.employee_id, email: target.email, ...metadata },
+          }),
+        });
+      }
       async function loadProfiles() {
-        const search = document.querySelector("#search").value.trim();
+        const search = document.querySelector("#search").value.trim() || document.querySelector("#globalSearch").value.trim();
         const query = search
           ? `or=(email.ilike.*${encodeURIComponent(search)}*,employee_id.ilike.*${encodeURIComponent(search)}*,display_name.ilike.*${encodeURIComponent(search)}*)`
           : "order=employee_id";
-        const profiles = await supabaseFetch(`/rest/v1/profiles?select=id,email,display_name,employee_id,level,join_date,position_title,account_status&${query}`);
+        profiles = await supabaseFetch(`/rest/v1/profiles?select=id,email,display_name,employee_id,level,join_date,position_title,phone,account_status,role_code,preferred_locale,preferred_calendar,manager_id,full_name_english,full_name_persian,business_unit_id,department_id,team_id&${query}`);
         countLabel.textContent = `${profiles.length} profile${profiles.length === 1 ? "" : "s"}`;
-        fillSelect(document.querySelector("#managerId"), profiles, "No manager");
+        fillSelect(document.querySelector("#managerId"), profiles.filter((profile) => profile.account_status === "active"), "No manager");
+        renderStats();
+        renderRows();
+        if (!selectedProfile && profiles[0]) selectProfile(profiles[0].id);
+        if (selectedProfile) {
+          const fresh = profiles.find((profile) => profile.id === selectedProfile.id);
+          if (fresh) selectProfile(fresh.id);
+        }
+      }
+      function renderStats() {
+        const active = profiles.filter((profile) => profile.account_status === "active").length;
+        const managers = profiles.filter((profile) => profile.role_code === "MANAGER").length;
+        document.querySelector("#totalCount").textContent = profiles.length;
+        document.querySelector("#activeCount").textContent = active;
+        document.querySelector("#managerCount").textContent = managers;
+        document.querySelector("#activeProgress").style.width = `${profiles.length ? (active / profiles.length) * 100 : 0}%`;
+        document.querySelector("#managerProgress").style.width = `${profiles.length ? (managers / profiles.length) * 100 : 0}%`;
+      }
+      function renderRows() {
         rows.innerHTML = profiles.map((profile) => `
-          <tr>
+          <tr onclick="selectProfile('${profile.id}')">
             <td>${profile.employee_id || ""}</td>
-            <td>${profile.display_name || ""}</td>
+            <td><strong>${profile.display_name || ""}</strong><div class="muted">${profile.full_name_persian || ""}</div></td>
             <td>${profile.email || ""}</td>
             <td>${profile.level || ""}</td>
             <td>${isoDateToJalali(profile.join_date)}</td>
             <td>${profile.position_title || ""}</td>
-            <td><span class="pill">${profile.account_status}</span></td>
+            <td><span class="pill ${profile.account_status === "active" ? "active" : "deactivated"}">${profile.account_status}</span></td>
           </tr>
         `).join("");
       }
-
+      window.selectProfile = function selectProfile(id) {
+        selectedProfile = profiles.find((profile) => profile.id === id) || null;
+        if (!selectedProfile) return;
+        const manager = profiles.find((profile) => profile.id === selectedProfile.manager_id);
+        const statusClass = selectedProfile.account_status === "active" ? "pill active" : "pill deactivated";
+        document.querySelector("#crumbName").textContent = selectedProfile.display_name || selectedProfile.email || "Employee";
+        document.querySelector("#heroInitials").textContent = initials(selectedProfile.display_name);
+        document.querySelector("#heroName").textContent = selectedProfile.display_name || "Employee Profile";
+        document.querySelector("#heroStatus").className = statusClass;
+        document.querySelector("#heroStatus").textContent = selectedProfile.account_status || "-";
+        document.querySelector("#heroTitle").textContent = `${selectedProfile.position_title || "No title"} • ${selectedProfile.level || "No level"}`;
+        document.querySelector("#heroEmployeeId").textContent = selectedProfile.employee_id || "-";
+        document.querySelector("#heroJoinDate").textContent = isoDateToJalali(selectedProfile.join_date) || "-";
+        document.querySelector("#heroLocale").textContent = `${selectedProfile.preferred_locale || "fa-IR"} · ${selectedProfile.preferred_calendar || "jalali"}`;
+        document.querySelector("#detailEmail").textContent = selectedProfile.email || "-";
+        document.querySelector("#detailLevel").textContent = selectedProfile.level || "-";
+        document.querySelector("#detailPosition").textContent = selectedProfile.position_title || "-";
+        document.querySelector("#detailPhone").textContent = selectedProfile.phone || "-";
+        document.querySelector("#detailJoin").textContent = isoDateToJalali(selectedProfile.join_date) || "-";
+        document.querySelector("#detailLocale").textContent = `${selectedProfile.preferred_locale || "fa-IR"} / ${selectedProfile.preferred_calendar || "jalali"}`;
+        document.querySelector("#managerInitials").textContent = initials(manager?.display_name || "NA");
+        document.querySelector("#managerName").textContent = manager?.display_name || "No manager selected";
+        document.querySelector("#activityList").innerHTML = [
+          ["Profile selected", selectedProfile.display_name || selectedProfile.email],
+          ["Account status", selectedProfile.account_status],
+          ["Role", selectedProfile.role_code || "EMPLOYEE"],
+        ].map(([label, value]) => `<div class="manager-card"><span class="mini-avatar">${initials(label)}</span><div><strong>${label}</strong><p class="muted">${value || "-"}</p></div></div>`).join("");
+      };
+      window.fillFormFromSelected = function fillFormFromSelected() {
+        if (!selectedProfile) return;
+        document.querySelector("#editingId").value = selectedProfile.id;
+        document.querySelector("#email").value = selectedProfile.email || "";
+        document.querySelector("#employeeId").value = selectedProfile.employee_id || "";
+        document.querySelector("#fullNameEnglish").value = selectedProfile.full_name_english || selectedProfile.display_name || "";
+        document.querySelector("#fullNamePersian").value = selectedProfile.full_name_persian || "";
+        document.querySelector("#joinDate").value = isoDateToJalali(selectedProfile.join_date);
+        document.querySelector("#level").value = selectedProfile.level || "L1";
+        document.querySelector("#positionTitle").value = selectedProfile.position_title || "";
+        document.querySelector("#phone").value = selectedProfile.phone || "";
+        document.querySelector("#businessUnitId").value = selectedProfile.business_unit_id || "";
+        document.querySelector("#departmentId").value = selectedProfile.department_id || "";
+        document.querySelector("#teamId").value = selectedProfile.team_id || "";
+        document.querySelector("#managerId").value = selectedProfile.manager_id || "";
+        document.querySelector("#submitProfileButton").textContent = "Update employee";
+        document.querySelector("#email").focus();
+      };
+      function resetForm() {
+        document.querySelector("#profileForm").reset();
+        document.querySelector("#editingId").value = "";
+        document.querySelector("#level").value = "L1";
+        document.querySelector("#submitProfileButton").textContent = "Create employee";
+      }
+      window.openDeactivateModal = function openDeactivateModal() {
+        if (!selectedProfile) return;
+        document.querySelector("#deactivateInitials").textContent = initials(selectedProfile.display_name);
+        document.querySelector("#deactivateName").textContent = selectedProfile.display_name || selectedProfile.email;
+        document.querySelector("#deactivateTitle").textContent = selectedProfile.position_title || selectedProfile.employee_id || "";
+        document.querySelector("#deactivationReason").value = "";
+        document.querySelector("#deactivateModal").classList.add("visible");
+      };
+      window.closeDeactivateModal = function closeDeactivateModal() {
+        document.querySelector("#deactivateModal").classList.remove("visible");
+      };
+      window.deactivateSelectedProfile = async function deactivateSelectedProfile() {
+        if (!selectedProfile) return;
+        const reason = document.querySelector("#deactivationReason").value.trim();
+        if (reason.length < 5) {
+          showMessage("Please enter a clear deactivation reason.", "error");
+          return;
+        }
+        await supabaseFetch(`/rest/v1/profiles?id=eq.${selectedProfile.id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ account_status: "deactivated", updated_at: new Date().toISOString() }),
+        });
+        await writeAudit("profile.deactivated", selectedProfile, selectedProfile.account_status, "deactivated", reason);
+        closeDeactivateModal();
+        showMessage("Employee deactivated and audit event written.", "success");
+        await loadProfiles();
+      };
       document.querySelector("#profileForm").addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
+          const editingId = document.querySelector("#editingId").value;
           const payload = {
-            email: document.querySelector("#email").value,
-            employee_id: document.querySelector("#employeeId").value,
-            display_name: document.querySelector("#fullNameEnglish").value,
-            full_name_english: document.querySelector("#fullNameEnglish").value,
-            full_name_persian: document.querySelector("#fullNamePersian").value,
-            username: document.querySelector("#email").value.split("@")[0],
-            join_date: jalaliToIsoDate(document.querySelector("#joinDate").value),
-            level: document.querySelector("#level").value,
-            position_title: document.querySelector("#positionTitle").value,
-            phone: document.querySelector("#phone").value || null,
+            email: document.querySelector("#email").value.trim(),
+            employee_id: document.querySelector("#employeeId").value.trim(),
+            display_name: document.querySelector("#fullNameEnglish").value.trim(),
+            full_name_english: document.querySelector("#fullNameEnglish").value.trim(),
+            full_name_persian: document.querySelector("#fullNamePersian").value.trim(),
+            username: document.querySelector("#email").value.trim().split("@")[0],
+            join_date: jalaliToIsoDate(document.querySelector("#joinDate").value.trim()),
+            level: document.querySelector("#level").value.trim(),
+            position_title: document.querySelector("#positionTitle").value.trim(),
+            phone: document.querySelector("#phone").value.trim() || null,
             business_unit_id: document.querySelector("#businessUnitId").value,
             department_id: document.querySelector("#departmentId").value,
             team_id: document.querySelector("#teamId").value,
@@ -439,40 +987,53 @@
             preferred_language: "fa",
             text_direction: "rtl",
             language_preference_status: "defaulted",
+            updated_at: new Date().toISOString(),
           };
-          const temporaryPassword = crypto.randomUUID();
-          const signup = await fetch(`${supabaseUrl}/auth/v1/signup`, {
-            method: "POST",
-            headers: { apikey: publishableKey, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: payload.email,
-              password: temporaryPassword,
-              data: { display_name: payload.display_name },
-            }),
-          }).then(async (response) => {
-            const body = await response.json();
-            if (!response.ok) throw new Error(body.msg || body.message || "Could not create Auth user");
-            return body;
-          });
-
-          payload.id = signup.user?.id || signup.id;
-          if (!payload.id) throw new Error("Auth user was created but no user id was returned");
-          await supabaseFetch("/rest/v1/profiles", {
-            method: "POST",
-            headers: { Prefer: "return=minimal" },
-            body: JSON.stringify(payload),
-          });
-          showMessage(`Profile created. Temporary password: ${temporaryPassword}`, "success");
-          event.target.reset();
+          if (editingId) {
+            await supabaseFetch(`/rest/v1/profiles?id=eq.${editingId}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify(payload),
+            });
+            await writeAudit("profile.updated", { id: editingId, ...payload }, selectedProfile?.account_status || null, payload.account_status, "Manual profile update");
+            showMessage("Profile updated and audit event written.", "success");
+          } else {
+            const temporaryPassword = crypto.randomUUID();
+            const signup = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+              method: "POST",
+              headers: { apikey: publishableKey, "Content-Type": "application/json" },
+              body: JSON.stringify({ email: payload.email, password: temporaryPassword, data: { display_name: payload.display_name } }),
+            }).then(async (response) => {
+              const body = await response.json();
+              if (!response.ok) throw new Error(body.msg || body.message || "Could not create Auth user");
+              return body;
+            });
+            payload.id = signup.user?.id || signup.id;
+            if (!payload.id) throw new Error("Auth user was created but no user id was returned");
+            await supabaseFetch("/rest/v1/profiles", {
+              method: "POST",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify(payload),
+            });
+            await writeAudit("profile.created", payload, null, "active", "Manual profile creation");
+            showMessage(`Profile created. Temporary password: ${temporaryPassword}`, "success");
+          }
+          resetForm();
           await loadProfiles();
         } catch (error) {
           showMessage(error.message, "error");
         }
       });
-
       document.querySelector("#refreshButton").addEventListener("click", loadProfiles);
+      document.querySelector("#clearFormButton").addEventListener("click", resetForm);
       document.querySelector("#search").addEventListener("input", () => loadProfiles().catch(console.error));
-
+      document.querySelector("#globalSearch").addEventListener("input", (event) => {
+        document.querySelector("#search").value = event.target.value;
+        loadProfiles().catch(console.error);
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeDeactivateModal();
+      });
       (async function init() {
         try {
           await ensureToken();

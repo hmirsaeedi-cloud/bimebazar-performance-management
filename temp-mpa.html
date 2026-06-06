@@ -179,6 +179,8 @@
         table { display: block; overflow-x: auto; }
       }
     </style>
+    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
   </head>
   <body>
     <main>
@@ -340,19 +342,7 @@
 
       async function ensureToken() {
         if (!accessToken) {
-          const email = prompt("Enter your BimeBazar admin email", "h.mirsaeedi@bimebazar.com");
-          const password = prompt("Enter your password");
-          const data = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-            method: "POST",
-            headers: { apikey: publishableKey, "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-          }).then(async (response) => {
-            const body = await response.json();
-            if (!response.ok) throw new Error(body.msg || "Login failed");
-            return body;
-          });
-          accessToken = data.access_token;
-          localStorage.setItem("bb_access_token", accessToken);
+          throw new Error("Please open Login first, then return to this page.");
         }
         currentUser = await supabaseFetch("/auth/v1/user");
       }
@@ -636,5 +626,6 @@
         }
       })();
     </script>
+    <script src="detail-shell.js?v=flip7-system-2"></script>
   </body>
 </html>
