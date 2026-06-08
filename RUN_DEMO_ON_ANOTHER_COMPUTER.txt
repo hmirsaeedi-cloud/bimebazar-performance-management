@@ -1,0 +1,38 @@
+BimeBazar Performance Management Demo
+
+How to run this demo on another computer:
+
+1. Unzip the project folder.
+2. Open Terminal or Command Prompt.
+3. Go inside the unzipped folder.
+4. Run one of these commands:
+
+   If Python is available:
+   python3 -m http.server 4180
+
+   If that does not work, try:
+   python -m http.server 4180
+
+5. Open this link in the browser:
+   http://localhost:4180/index.html
+
+Demo login:
+
+HR Admin
+h.mirsaeedi@bimebazar.com
+Demo@1405
+
+HRBP
+sara.ahmadi@bimebazar.com
+Demo@1405
+
+Manager
+reza.moradi@bimebazar.com
+Demo@1405
+
+Employee
+niloofar.karimi@bimebazar.com
+Demo@1405
+
+Note:
+This package uses local demo data only. It does not need Supabase or internet access for the presentation demo screens.

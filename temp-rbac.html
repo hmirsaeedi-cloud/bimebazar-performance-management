@@ -262,8 +262,8 @@
         main { padding: 18px 14px 38px; }
       }
     </style>
-    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
-    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
+    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
   </head>
   <body>
     <header class="topbar">
@@ -292,10 +292,13 @@
 
     <div id="appContent" class="layout app-content">
       <aside>
-        <div class="side-title">
-          <span class="brand-mark">B</span>
-          <div><strong>BimeBazar</strong><span>Enterprise Suite</span></div>
-        </div>
+        <a class="brand" href="/index.html" aria-label="BimeBazar home">
+          <span class="brand-mark brand-logo"><img src="/assets/bb-logo.svg" alt="" /></span>
+          <span>
+            <strong>BimeBazar</strong>
+            <small>Performance</small>
+          </span>
+        </a>
         <nav class="nav-list">
           <a class="nav-item" href="/temp-dashboard.html"><span class="material-symbols-outlined">dashboard</span>Home</a>
           <a class="nav-item" href="/temp-profiles.html"><span class="material-symbols-outlined">group</span>People</a>
@@ -304,10 +307,7 @@
           <a class="nav-item" href="/temp-hrbp-reports.html"><span class="material-symbols-outlined">assessment</span>Reports</a>
           <a class="nav-item active" href="/temp-rbac.html"><span class="material-symbols-outlined">settings</span>Administration</a>
         </nav>
-        <div class="side-footer">
-          <a class="nav-item" href="/temp-audit-log.html"><span class="material-symbols-outlined">history</span>Audit Log</a>
-          <a class="nav-item" href="/temp-login.html"><span class="material-symbols-outlined">logout</span>Log Out</a>
-        </div>
+        <div class="side-footer"></div>
       </aside>
 
       <main>
@@ -422,7 +422,8 @@
       </main>
     </div>
 
-    <script src="sidebar-links.js?v=flip7-system-2"></script>
+    <script src="sidebar-links.js?v=bb-logo-sidebar-1"></script>
+    <script src="demo-data.js?v=demo-users-1"></script>
     <script>
       const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
       const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";

@@ -111,6 +111,20 @@ a {
   transform: rotate(-3deg);
 }
 
+.brand-mark.brand-logo {
+  border-color: transparent;
+  background: #ffffff;
+  box-shadow: 0 4px 18px rgba(255, 210, 63, 0.22);
+  transform: rotate(0deg);
+}
+
+.brand-mark.brand-logo img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
 .brand strong,
 .brand small {
   display: block;
@@ -119,6 +133,41 @@ a {
 .brand small {
   color: var(--muted);
   margin-top: 2px;
+}
+
+.sidebar > .brand,
+body > .layout > aside > .brand {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-height: 52px !important;
+  color: var(--brand-dark) !important;
+}
+
+.sidebar > .brand .brand-mark.brand-logo,
+body > .layout > aside > .brand .brand-mark.brand-logo {
+  width: 52px !important;
+  height: 52px !important;
+  border: 3px solid transparent !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: 0 4px 18px rgba(255, 210, 63, 0.22) !important;
+  transform: rotate(0deg) !important;
+}
+
+.sidebar > .brand strong,
+body > .layout > aside > .brand strong {
+  color: #111111 !important;
+  font-size: 1rem !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
+}
+
+.sidebar > .brand small,
+body > .layout > aside > .brand small {
+  color: var(--muted) !important;
+  font-size: 0.78rem !important;
+  font-weight: 750 !important;
 }
 
 .nav-list {
@@ -196,14 +245,15 @@ a {
 
 .nav-subitem:hover,
 .nav-subitem.is-active {
-  background: var(--brand-bg);
-  color: var(--brand-dark);
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.34), rgba(255, 228, 122, 0.5));
+  color: var(--dark);
+  box-shadow: 0 4px 14px rgba(255, 210, 63, 0.22);
 }
 
 .shortcut-list {
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 5px;
   min-height: 0;
   overflow: auto;
   padding-top: 14px;
@@ -222,44 +272,152 @@ a {
 .shortcut-list a {
   display: flex;
   align-items: center;
-  min-height: 32px;
-  border-radius: 8px;
-  padding: 0 10px;
+  min-height: 34px;
+  border-radius: 14px;
+  padding: 0 11px;
   color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 720;
+  font-size: 0.8rem;
+  font-weight: 780;
 }
 
-.shortcut-list a:hover {
-  background: #eef4f5;
-  color: var(--brand-ink);
+.shortcut-list a:hover,
+.shortcut-list a.is-active {
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.34), rgba(255, 228, 122, 0.5));
+  color: var(--dark);
+  box-shadow: 0 4px 14px rgba(255, 210, 63, 0.2);
 }
 
-.sidebar-footer {
-  display: grid;
+.related-shortcuts {
+  display: grid !important;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr) !important;
+  gap: 18px !important;
+  align-items: center !important;
+  padding: 18px !important;
+}
+
+.related-shortcuts h2 {
+  margin: 0 0 4px !important;
+  color: var(--brand-dark) !important;
+  font-size: 1rem !important;
+}
+
+.related-shortcuts p {
+  margin: 0 !important;
+  color: var(--muted) !important;
+  font-size: 12px !important;
+}
+
+.related-shortcuts-grid {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 16px;
+}
+
+.related-shortcuts-grid a {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--brand-dark) !important;
+  font-size: 0.78rem;
+  font-weight: 850;
+  padding: 0 12px;
+}
+
+.related-shortcuts-grid a:hover,
+.related-shortcuts-grid a.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.34), rgba(255, 228, 122, 0.5));
+  color: var(--dark) !important;
+  box-shadow: 0 4px 14px rgba(255, 210, 63, 0.2);
+}
+
+.detail-workspace > header > nav {
+  display: none !important;
+}
+
+.sidebar-footer,
+.side-footer {
+  display: block;
+  padding: 12px;
   border-top: 0;
   border-radius: 20px;
   background: linear-gradient(135deg, var(--brand), var(--brand-dark));
   box-shadow: var(--shadow-teal);
 }
 
-.sidebar-footer a {
-  color: #f7f7f2;
-  font-size: 0.88rem;
-  font-weight: 700;
+.sidebar-user {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
 }
 
-.sidebar-footer a:hover,
-.sidebar-footer a.is-active {
-  color: var(--gold-light);
+.sidebar-user-copy {
+  min-width: 0;
+}
+
+.sidebar-user-copy span,
+.sidebar-user-copy small,
+.sidebar-user-copy strong {
+  display: block;
+}
+
+.sidebar-user-copy span,
+.sidebar-user-copy small {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.sidebar-user-copy strong {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 0.94rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-logout-button {
+  display: inline-grid !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  place-items: center !important;
+  border: 2px solid rgba(255, 255, 255, 0.36) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.sidebar-logout-button:hover {
+  background: var(--gold) !important;
+  color: var(--dark) !important;
+  box-shadow: var(--shadow-accent) !important;
+}
+
+.sidebar-logout-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.3;
 }
 
 .workspace {
   display: grid;
   gap: 24px;
   align-content: start;
+  min-width: 0;
   padding: 18px clamp(12px, 2vw, 24px) 36px;
 }
 
@@ -268,12 +426,27 @@ a {
   margin: 0;
 }
 
+.app-shell > *,
+.workspace > *,
+.detail-workspace > * {
+  min-width: 0;
+}
+
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   min-height: 96px;
+}
+
+.workspace > header.topbar,
+.detail-workspace > header.topbar,
+.people-workspace > header.topbar {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
 .eyebrow {
@@ -295,9 +468,9 @@ p {
 h1 {
   margin-bottom: 0;
   color: var(--ink);
-  font-size: clamp(2.2rem, 4vw, 3.65rem);
+  font-size: 32px;
   line-height: 1.1;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   font-weight: 850;
 }
 
@@ -878,6 +1051,31 @@ body > .layout main a.button-primary {
   box-shadow: var(--shadow-accent) !important;
 }
 
+/* Compact action buttons for dense tables. */
+:where(.workspace, .detail-workspace, .people-workspace, body > .layout main) table td.actions button,
+:where(.workspace, .detail-workspace, .people-workspace, body > .layout main) table td .actions button {
+  min-height: 32px !important;
+  height: 32px !important;
+  min-width: auto !important;
+  border-radius: 999px !important;
+  padding: 0 11px !important;
+  font-size: 0.75rem !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+  box-shadow: 0 3px 10px rgba(255, 210, 63, 0.22) !important;
+  white-space: nowrap !important;
+}
+
+:where(.workspace, .detail-workspace, .people-workspace, body > .layout main) table td.actions button.secondary,
+:where(.workspace, .detail-workspace, .people-workspace, body > .layout main) table td .actions button.secondary {
+  box-shadow: 0 3px 10px rgba(43, 168, 162, 0.18) !important;
+}
+
+:where(.workspace, .detail-workspace, .people-workspace, body > .layout main) table td.actions button.warning,
+:where(.workspace, .detail-workspace, .people-workspace, body > .layout main) table td .actions button.warning {
+  box-shadow: 0 3px 10px rgba(239, 108, 74, 0.18) !important;
+}
+
 .detail-workspace .message,
 .people-workspace .message {
   border-radius: 18px !important;
@@ -957,4 +1155,27 @@ body > .layout main a.button-primary {
   .primary-action {
     width: 100%;
   }
+
+  .related-shortcuts {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.workspace h1,
+.detail-workspace h1,
+.people-workspace h1,
+body > .layout main h1,
+.shell main h1 {
+  font-size: 32px !important;
+  line-height: 1.15 !important;
+  letter-spacing: 0 !important;
+}
+
+.workspace header > div > p:not(.eyebrow),
+.detail-workspace header > div > p:not(.eyebrow),
+.people-workspace header > div > p:not(.eyebrow),
+body > .layout main header > div > p:not(.eyebrow),
+.shell main header > div > p:not(.eyebrow) {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
 }

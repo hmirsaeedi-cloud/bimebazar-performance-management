@@ -20,10 +20,10 @@
       button { min-height:40px; border:0; border-radius:8px; background:var(--teal); color:#fff; cursor:pointer; font:inherit; font-weight:800; padding:0 12px; }
       button.secondary { border:1px solid var(--line); background:#fff; color:var(--ink); }
       button.warning { background:var(--gold); }
-      table { width:100%; border-collapse:collapse; margin-top:14px; }
+      table { width:100%; max-width:100%; border-collapse:collapse; margin-top:14px; table-layout:fixed; }
       th,td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align:top; }
       th { color:var(--muted); font-size:.78rem; }
-      code { font-size:.76rem; word-break:break-word; }
+      code { display:block; max-width:100%; overflow-wrap:anywhere; font-size:.76rem; white-space:normal; word-break:break-word; }
       .full { grid-column:1 / -1; }
       .pill { display:inline-flex; border-radius:999px; padding:4px 8px; background:#e8f4f2; color:#075b5b; font-size:.76rem; font-weight:800; }
       .pill.active { background:#e9f7ed; color:var(--green); }
@@ -34,18 +34,20 @@
       .message { display:none; margin-top:12px; border-radius:8px; padding:10px 12px; }
       .message.error { display:block; border:1px solid #efb3ad; background:#fff0ee; color:var(--danger); }
       .message.success { display:block; border:1px solid #b8dfc2; background:#eefaf1; color:#245f37; }
-      .chart { overflow:auto; padding:20px; background:linear-gradient(#f9fbfa,#f4f8f7); border:1px solid var(--line); border-radius:8px; }
-      .level { display:flex; justify-content:center; gap:16px; min-width:760px; position:relative; }
+      .chart { width:100%; max-width:100%; overflow:hidden; padding:20px; background:linear-gradient(#f9fbfa,#f4f8f7); border:1px solid var(--line); border-radius:8px; }
+      .level { display:flex; flex-wrap:wrap; justify-content:center; gap:16px; width:100%; max-width:100%; min-width:0; position:relative; }
       .level + .level { margin-top:34px; padding-top:22px; border-top:1px dashed #c7d5d2; }
-      .card { width:220px; border:1px solid var(--line); border-radius:8px; padding:12px; background:#fff; box-shadow:0 8px 24px rgba(22,40,48,.07); }
+      .card { width:min(220px, 100%); max-width:100%; min-width:0; border:1px solid var(--line); border-radius:8px; padding:12px; background:#fff; box-shadow:0 8px 24px rgba(22,40,48,.07); }
       .card.root { border-color:var(--teal); box-shadow:0 0 0 3px rgba(8,124,124,.12); }
       .avatar { width:36px; height:36px; border-radius:999px; display:grid; place-items:center; margin-bottom:10px; background:#e7f3f1; color:#075b5b; font-weight:900; }
-      .card strong { display:block; line-height:1.2; }
-      .lineLabel { text-align:center; color:var(--muted); font-size:.75rem; font-weight:800; min-width:760px; margin:18px 0 -12px; }
-      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+      .card strong { display:block; overflow-wrap:anywhere; line-height:1.2; }
+      .card .muted { overflow-wrap:anywhere; }
+      .lineLabel { width:100%; max-width:100%; text-align:center; color:var(--muted); font-size:.75rem; font-weight:800; min-width:0; margin:18px 0 -12px; }
+      @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form { grid-template-columns:1fr; } table { display:block; max-width:100%; overflow-x:auto; table-layout:auto; } }
+      @media (max-width:560px) { .chart { padding:12px; } .card { width:100%; } th,td { padding:9px 6px; } }
     </style>
-    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
-    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
+    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
   </head>
   <body>
     <main>
@@ -88,6 +90,7 @@
       </section>
     </main>
 
+    <script src="demo-data.js?v=demo-users-1"></script>
     <script>
       const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
       const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
@@ -227,6 +230,6 @@
       }
       init();
     </script>
-    <script src="detail-shell.js?v=flip7-system-2"></script>
+    <script src="detail-shell.js?v=remove-header-nav-1"></script>
   </body>
 </html>

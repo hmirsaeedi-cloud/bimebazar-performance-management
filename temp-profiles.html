@@ -405,14 +405,14 @@
         .topbar { height: auto; min-height: 64px; flex-wrap: wrap; padding: 12px; }
       }
     </style>
-    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
-    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
+    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="Primary navigation">
         <a class="brand" href="/index.html" aria-label="BimeBazar home">
-          <span class="brand-mark">BB</span>
+          <span class="brand-mark brand-logo"><img src="/assets/bb-logo.svg" alt="" /></span>
           <span>
             <strong>BimeBazar</strong>
             <small>Performance</small>
@@ -482,11 +482,7 @@
           </div>
         </nav>
 
-        <div class="sidebar-footer">
-          <a href="/temp-login.html">Login</a>
-          <a href="/temp-dashboard.html">Dashboard Detail</a>
-          <a class="is-active" href="/temp-profiles.html">People Detail</a>
-        </div>
+        <div class="sidebar-footer"></div>
       </aside>
 
       <main class="workspace people-workspace">
@@ -699,7 +695,8 @@
       </div>
     </div>
 
-    <script src="sidebar-links.js?v=flip7-system-2"></script>
+    <script src="sidebar-links.js?v=bb-logo-sidebar-1"></script>
+    <script src="demo-data.js?v=demo-users-1"></script>
     <script>
       const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
       const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";

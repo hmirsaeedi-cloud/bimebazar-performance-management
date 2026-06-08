@@ -459,6 +459,85 @@
         color: var(--muted);
       }
 
+      .demo-panel {
+        margin-top: 18px;
+        border: 1px dashed var(--line);
+        border-radius: 16px;
+        background: rgba(255, 248, 231, 0.82);
+        padding: 14px;
+      }
+
+      .demo-panel-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .demo-panel-header strong {
+        display: block;
+        color: var(--primary);
+        font-size: 0.96rem;
+      }
+
+      .demo-panel-header span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 0.78rem;
+        line-height: 1.5;
+      }
+
+      .demo-account-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .demo-account {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface);
+        padding: 10px;
+        direction: ltr;
+      }
+
+      .demo-account strong,
+      .demo-account span,
+      .demo-account code {
+        display: block;
+      }
+
+      .demo-account span {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .demo-account code {
+        margin-top: 4px;
+        color: var(--primary-strong);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.78rem;
+      }
+
+      .demo-account button {
+        min-height: 38px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--primary-container);
+        color: var(--on-primary-fixed);
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.78rem;
+        font-weight: 900;
+        padding: 0 12px;
+        white-space: nowrap;
+      }
+
       footer {
         border-top: 1px solid var(--line);
       }
@@ -562,8 +641,8 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="detail-ui.css?v=flip7-system-2" />
-    <link rel="stylesheet" href="product-ui.css?v=flip7-system-2" />
+    <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
+    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
   </head>
   <body data-lang="fa">
     <div class="shell">
@@ -658,6 +737,16 @@
               </button>
             </div>
 
+            <section class="demo-panel" aria-label="Demo users">
+              <div class="demo-panel-header">
+                <div>
+                  <strong id="demoTitle">کاربران دمو</strong>
+                  <span id="demoSubtitle">این رمزها فقط برای ارائه محلی هستند و رمز واقعی هیچ کاربری نیستند.</span>
+                </div>
+              </div>
+              <div id="demoAccounts" class="demo-account-list"></div>
+            </section>
+
             <section id="profile" class="profile" aria-live="polite"></section>
 
             <p class="request-row">
@@ -680,6 +769,7 @@
       </footer>
     </div>
 
+    <script src="demo-data.js?v=demo-users-1"></script>
     <script>
       const supabaseUrl = "https://omjblauittoyxknabrqg.supabase.co";
       const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
@@ -749,6 +839,9 @@
       const submitButton = document.querySelector("#submitButton");
       const togglePassword = document.querySelector("#togglePassword");
       const togglePasswordIcon = document.querySelector("#togglePasswordIcon");
+      const demoAccounts = document.querySelector("#demoAccounts");
+      const demoTitle = document.querySelector("#demoTitle");
+      const demoSubtitle = document.querySelector("#demoSubtitle");
       let lang = "fa";
 
       function t(key) {
@@ -764,6 +857,11 @@
           const key = node.dataset.i18n;
           node.textContent = dictionary[lang][key] ?? node.textContent;
         });
+        demoTitle.textContent = lang === "fa" ? "کاربران دمو" : "Demo users";
+        demoSubtitle.textContent = lang === "fa"
+          ? "این رمزها فقط برای ارائه محلی هستند و رمز واقعی هیچ کاربری نیستند."
+          : "These are local demo passwords only. They are not real user passwords.";
+        renderDemoAccounts();
       }
 
       function showMessage(text, type) {
@@ -803,6 +901,22 @@
         `;
       }
 
+      function renderDemoAccounts() {
+        const accounts = window.BimeBazarDemoAccounts || [];
+        demoAccounts.innerHTML = accounts.map((account) => `
+          <article class="demo-account">
+            <div>
+              <strong>${account.name} · ${account.roleLabel}</strong>
+              <span>${account.email}</span>
+              <code>Password: ${account.password}</code>
+            </div>
+            <button type="button" data-demo-email="${account.email}" data-demo-password="${account.password}">
+              ${lang === "fa" ? "ورود دمو" : "Demo login"}
+            </button>
+          </article>
+        `).join("");
+      }
+
       document.querySelector("#languageButton").addEventListener("click", () => {
         applyLanguage(lang === "fa" ? "en" : "fa");
       });
@@ -812,6 +926,14 @@
         const isPassword = passwordInput.type === "password";
         passwordInput.type = isPassword ? "text" : "password";
         togglePasswordIcon.textContent = isPassword ? "visibility_off" : "visibility";
+      });
+
+      demoAccounts.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-demo-email]");
+        if (!button) return;
+        document.querySelector("#email").value = button.dataset.demoEmail;
+        document.querySelector("#password").value = button.dataset.demoPassword;
+        form.requestSubmit();
       });
 
       form.addEventListener("submit", async (event) => {

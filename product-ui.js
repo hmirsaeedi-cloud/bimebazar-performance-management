@@ -249,10 +249,17 @@ navItems.forEach((item) => {
 
 roleSelect.addEventListener("change", () => {
   const role = roleSelect.value;
+  localStorage.setItem("bb_demo_role", role);
   if (role === "employee") renderView("growth");
   if (role === "manager") renderView("evaluations");
   if (role === "hrbp") renderView("reports");
   if (role === "hr_admin") renderView("overview");
 });
 
-renderView("overview");
+const storedRole = localStorage.getItem("bb_demo_role");
+if (storedRole && [...roleSelect.options].some((option) => option.value === storedRole)) {
+  roleSelect.value = storedRole;
+  roleSelect.dispatchEvent(new Event("change"));
+} else {
+  renderView("overview");
+}

@@ -57,10 +57,19 @@ header {
   margin-bottom: 4px;
 }
 
+.workspace > header.topbar,
+.detail-workspace > header.topbar,
+.people-workspace > header.topbar {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
 header h1 {
   margin-bottom: 6px !important;
   color: var(--ink) !important;
-  font-size: clamp(2.1rem, 4vw, 3.45rem) !important;
+  font-size: 32px !important;
   line-height: 1.1 !important;
   letter-spacing: 0 !important;
 }
@@ -70,6 +79,12 @@ p,
 .muted {
   color: var(--muted) !important;
   line-height: 1.5 !important;
+}
+
+header > div > p:not(.eyebrow),
+.topbar > div > p:not(.eyebrow) {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
 }
 
 section,
@@ -182,10 +197,22 @@ aside {
   color: var(--ink) !important;
 }
 
-.brand-mark,
 .nav-item.active {
   background: linear-gradient(135deg, var(--gold), #e6b800) !important;
   color: var(--dark) !important;
+}
+
+.brand-mark.brand-logo {
+  border-color: transparent !important;
+  background: #ffffff !important;
+  transform: rotate(0deg) !important;
+}
+
+.brand-mark.brand-logo img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
 }
 
 .nav-item {
@@ -282,6 +309,13 @@ body > .layout > main {
   box-shadow: var(--shadow-accent) !important;
 }
 
+.nav-subitem:hover,
+.nav-subitem.is-active {
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.34), rgba(255, 228, 122, 0.5)) !important;
+  color: var(--dark) !important;
+  box-shadow: 0 4px 14px rgba(255, 210, 63, 0.22) !important;
+}
+
 .button-primary,
 .button-secondary,
 .button-danger {
@@ -366,4 +400,44 @@ header nav a:first-child::before {
   section {
     padding: 18px !important;
   }
+}
+
+/* Final sidebar color contract: keep selected navigation in the warm gold system. */
+.sidebar .nav-item,
+body > .layout aside .nav-item,
+.app-shell .sidebar .nav-item {
+  background: transparent !important;
+  color: var(--ink) !important;
+}
+
+.sidebar .nav-item:hover,
+.sidebar .nav-item.active,
+.sidebar .nav-item.is-active,
+body > .layout aside .nav-item:hover,
+body > .layout aside .nav-item.active,
+body > .layout aside .nav-item.is-active,
+.app-shell .sidebar .nav-item:hover,
+.app-shell .sidebar .nav-item.active,
+.app-shell .sidebar .nav-item.is-active {
+  background: linear-gradient(135deg, var(--gold), #e6b800) !important;
+  color: var(--dark) !important;
+  box-shadow: var(--shadow-accent) !important;
+}
+
+.sidebar .nav-subitem,
+body > .layout aside .nav-subitem,
+.app-shell .sidebar .nav-subitem {
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+
+.sidebar .nav-subitem:hover,
+.sidebar .nav-subitem.is-active,
+body > .layout aside .nav-subitem:hover,
+body > .layout aside .nav-subitem.is-active,
+.app-shell .sidebar .nav-subitem:hover,
+.app-shell .sidebar .nav-subitem.is-active {
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.34), rgba(255, 228, 122, 0.5)) !important;
+  color: var(--dark) !important;
+  box-shadow: 0 4px 14px rgba(255, 210, 63, 0.22) !important;
 }
