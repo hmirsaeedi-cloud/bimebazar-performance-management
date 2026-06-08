@@ -52,6 +52,6 @@
     localStorage.removeItem("bb_refresh_token");
     localStorage.removeItem("bb_demo_user_id");
     localStorage.removeItem("bb_demo_role");
-    window.location.href = `/temp-login.html?v=${navVersion}`;
+    window.location.href = `./temp-login.html?v=${navVersion}`;
   });
 })();
