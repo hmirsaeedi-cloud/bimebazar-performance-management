@@ -180,7 +180,8 @@
       }
     </style>
     <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
-    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
+    <link rel="stylesheet" href="product-ui.css?v=flowcharts-3" />
+    <link rel="stylesheet" href="workflow-guide.css?v=flowcharts-3" />
   </head>
   <body>
     <main>
@@ -239,6 +240,9 @@
             <h2>MPAs</h2>
             <p id="countLabel">Loading...</p>
           </div>
+          <label>Review comment or return reason
+            <input id="mpaActionReason" placeholder="Required when requesting a revision" />
+          </label>
         </div>
         <table>
           <thead>
@@ -409,23 +413,27 @@
 
       function renderActions(mpa) {
         const actions = {
-          draft: [["submit", "Submit"]],
-          returned: [["submit", "Resubmit"]],
-          submitted: [["employee_approve", "Employee approve"], ["return", "Return"]],
-          employee_approved: [["manager_approve", "Manager approve"], ["return", "Return"]],
-          manager_approved: [["activate", "Activate"], ["return", "Return"]],
+          draft: [["send_fl", "Send to Function Lead"], ["send_employee", "Send to Employee"]],
+          returned: [["send_fl", "Send to Function Lead"], ["send_employee", "Resend to Employee"]],
+          fl_review: [["finalize", "Finalize for Employee"], ["return", "Return to Manager"]],
+          pending_approval: [["approve", "Employee approve"], ["request_edit", "Request edit"]],
+          submitted: [["approve", "Employee approve"], ["request_edit", "Request edit"]],
+          approved: [["activate", "Attach to evaluation"]],
+          employee_approved: [["activate", "Attach to evaluation"]],
           active: [["archive", "Archive"]],
         }[mpa.status] || [];
-        return actions.map(([action, label]) => `<button data-id="${mpa.id}" data-action="${action}" class="${action === "return" ? "warning" : action === "archive" ? "danger" : ""}">${label}</button>`).join("");
+        return actions.map(([action, label]) => `<button data-id="${mpa.id}" data-action="${action}" class="${["return","request_edit"].includes(action) ? "warning" : action === "archive" ? "danger" : ""}">${label}</button>`).join("");
       }
 
       function nextState(status, action) {
         const table = {
-          draft: { submit: ["submitted", "EMPLOYEE", "employee_approve"], archive: ["archived", "SYSTEM", null] },
-          returned: { submit: ["submitted", "EMPLOYEE", "employee_approve"] },
-          submitted: { employee_approve: ["employee_approved", "MANAGER", "manager_approve"], return: ["returned", "MANAGER", "submit"] },
-          employee_approved: { manager_approve: ["manager_approved", "HRBP", "hrbp_activate"], return: ["returned", "MANAGER", "submit"] },
-          manager_approved: { activate: ["active", "SYSTEM", null], return: ["returned", "MANAGER", "submit"] },
+          draft: { send_fl: ["fl_review", "FUNCTION_LEAD", "review"], send_employee: ["pending_approval", "EMPLOYEE", "approve_or_request_edit"] },
+          returned: { send_fl: ["fl_review", "FUNCTION_LEAD", "review"], send_employee: ["pending_approval", "EMPLOYEE", "approve_or_request_edit"] },
+          fl_review: { finalize: ["pending_approval", "EMPLOYEE", "approve_or_request_edit"], return: ["returned", "MANAGER", "update"] },
+          pending_approval: { approve: ["approved", "SYSTEM", "attach_to_evaluation"], request_edit: ["returned", "MANAGER", "update"] },
+          submitted: { approve: ["approved", "SYSTEM", "attach_to_evaluation"], request_edit: ["returned", "MANAGER", "update"] },
+          approved: { activate: ["active", "SYSTEM", null] },
+          employee_approved: { activate: ["active", "SYSTEM", null] },
           active: { archive: ["archived", "SYSTEM", null] },
         };
         return table[status]?.[action];
@@ -436,21 +444,25 @@
         const next = nextState(current.status, action);
         if (!next) throw new Error(`Cannot ${action} from ${current.status}`);
         const now = new Date().toISOString();
-        const reason = action === "return" ? prompt("Why is this MPA being returned?", "Needs revision before approval") : null;
+        const requiresReason = ["return", "request_edit"].includes(action);
+        const reason = requiresReason ? document.querySelector("#mpaActionReason").value.trim() : null;
+        if (requiresReason && !reason) throw new Error("Add the review comment or return reason first.");
         const visibilityBefore = current.approval_visibility || {
           employeeCanViewManagerContent: false,
           employeeCanViewHrbpNotes: false,
         };
-        const visibilityAfter = action === "activate"
+        const visibilityAfter = ["send_employee", "finalize", "activate"].includes(action)
           ? { ...visibilityBefore, employeeCanViewManagerContent: true }
           : visibilityBefore;
         const timestamp = {
-          submit: { submitted_at: now },
-          employee_approve: { employee_approved_at: now },
-          manager_approve: { manager_approved_at: now },
+          send_fl: { submitted_at: now },
+          send_employee: { submitted_at: now },
+          finalize: { submitted_at: now },
+          approve: { employee_approved_at: now },
           activate: { activated_at: now },
           archive: { archived_at: now },
           return: {},
+          request_edit: {},
         }[action];
         await supabaseFetch(`/rest/v1/mpas?id=eq.${id}`, {
           method: "PATCH",
@@ -461,8 +473,8 @@
             next_action: next[2],
             updated_by: currentUser.id,
             updated_at: now,
-            ...(action === "activate" ? { approval_visibility: visibilityAfter } : {}),
-            ...(action === "return" ? { last_return_reason: reason } : {}),
+            ...(["send_employee", "finalize", "activate"].includes(action) ? { approval_visibility: visibilityAfter } : {}),
+            ...(requiresReason ? { last_return_reason: reason } : {}),
             ...timestamp,
           }),
         });
@@ -627,6 +639,7 @@
         }
       })();
     </script>
+    <script src="workflow-guide.js?v=flowcharts-3"></script>
     <script src="detail-shell.js?v=remove-header-nav-1"></script>
   </body>
 </html>

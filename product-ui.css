@@ -432,6 +432,10 @@ body > .layout > aside > .brand small {
   min-width: 0;
 }
 
+.detail-workspace > section:not(.workflow-guide) {
+  overflow-x: auto;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -1159,6 +1163,10 @@ body > .layout main a.button-primary {
   .related-shortcuts {
     grid-template-columns: 1fr !important;
   }
+}
+
+.detail-workspace > section:not(.workflow-guide) {
+  overflow-x: auto !important;
 }
 
 .workspace h1,

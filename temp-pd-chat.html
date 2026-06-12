@@ -51,7 +51,8 @@
       }
     </style>
     <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
-    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
+    <link rel="stylesheet" href="product-ui.css?v=flowcharts-3" />
+    <link rel="stylesheet" href="workflow-guide.css?v=flowcharts-3" />
   </head>
   <body>
     <main>
@@ -73,6 +74,21 @@
           <label>Manager<select id="managerId"></select></label>
           <label>Process<select id="processId"></select></label>
           <label>Evaluation<select id="evaluationId"></select></label>
+          <label>Initiated By
+            <select id="initiatorRole">
+              <option value="MANAGER">Manager</option>
+              <option value="EMPLOYEE">Employee</option>
+            </select>
+          </label>
+          <label>Dialogue Type
+            <select id="dialogueType">
+              <option value="goal_review">Goal Review</option>
+              <option value="development">Development Discussion</option>
+              <option value="performance_concern">Performance Concern</option>
+              <option value="general">General</option>
+            </select>
+          </label>
+          <label>Dialogue Date<input id="dialogueDate" type="date" /></label>
           <label>Topic<input id="topic" value="Quarterly development check-in" required /></label>
           <label style="grid-column: 1 / -1">First message<textarea id="messageText" required>I want to discuss growth goals and support needed for the next cycle.</textarea></label>
           <button type="submit">Create chat</button>
@@ -87,6 +103,12 @@
             <h2>Chat Logs</h2>
             <p id="countLabel">Loading...</p>
           </div>
+          <label>Next perspective
+            <input id="followupMessage" placeholder="Write the other party's note before acting" />
+          </label>
+          <label>Return reason
+            <input id="pdChatReason" placeholder="Required when returning a dialogue" />
+          </label>
         </div>
         <table>
           <thead>
@@ -160,9 +182,10 @@
 
       function stateFor(status, action) {
         const table = {
-          draft: { update: ["active", "EMPLOYEE_MANAGER", "submit"], submit: ["submitted", "MANAGER", "approve"] },
-          active: { update: ["active", "EMPLOYEE_MANAGER", "submit"], submit: ["submitted", "MANAGER", "approve"] },
-          submitted: { approve: ["manager_reviewed", "MANAGER", "override_visibility"], return: ["returned", "EMPLOYEE", "update"] },
+          draft: { update: ["active", "EMPLOYEE_MANAGER", "submit"], submit: ["submitted", "EMPLOYEE_MANAGER", "add_perspective"] },
+          active: { update: ["active", "EMPLOYEE_MANAGER", "submit"], submit: ["submitted", "EMPLOYEE_MANAGER", "add_perspective"] },
+          submitted: { approve: ["both_documented", "SYSTEM", "attach_to_evaluation"], return: ["returned", "EMPLOYEE_MANAGER", "update"] },
+          both_documented: { archive: ["archived", "SYSTEM", null] },
           manager_reviewed: { visibility: ["visibility_approved", "EMPLOYEE_MANAGER", "archive"], return: ["returned", "EMPLOYEE", "update"], archive: ["archived", "SYSTEM", null] },
           returned: { update: ["active", "EMPLOYEE_MANAGER", "submit"], submit: ["submitted", "MANAGER", "approve"] },
           visibility_approved: { archive: ["archived", "SYSTEM", null] },
@@ -218,11 +241,12 @@
         });
       }
 
-      function newMessage(body) {
+      function newMessage(body, authorRole = "EMPLOYEE", dialogueType = "general") {
         return {
           id: crypto.randomUUID(),
           authorId: currentUser.id,
-          authorRole: "HR_ADMIN",
+          authorRole,
+          dialogueType,
           body: body.trim(),
           createdAt: new Date().toISOString(),
           editedAt: null,
@@ -313,7 +337,8 @@
           draft: [["update", "Add message"], ["submit", "Submit"]],
           active: [["update", "Add message"], ["submit", "Submit"]],
           returned: [["update", "Add message"], ["submit", "Resubmit"]],
-          submitted: [["approve", "Manager review"], ["return", "Return"]],
+          submitted: [["approve", "Add other perspective"], ["return", "Return"]],
+          both_documented: [["archive", "Archive"]],
           manager_reviewed: [["visibility", "Share visibility"], ["archive", "Archive"], ["return", "Return"]],
           visibility_approved: [["archive", "Archive"]],
         }[chat.status] || [];
@@ -335,12 +360,15 @@
         const metadata = { owner: next[1], nextAction: next[2], processId: current.process_id, messageCount: (current.messages || []).length };
         let reason = null;
         let auditAction = `pd_chat.${action}`;
-        if (action === "update") {
-          const body = prompt("Add a PD Chat message", "Follow-up note from the development conversation.");
-          if (!body) return;
-          patch.messages = [...(current.messages || []), newMessage(body)];
+        if (["update", "approve"].includes(action)) {
+          const body = document.querySelector("#followupMessage").value.trim();
+          if (!body) throw new Error("Write the next perspective before continuing.");
+          const lastRole = (current.messages || []).at(-1)?.authorRole || "EMPLOYEE";
+          const authorRole = lastRole === "MANAGER" ? "EMPLOYEE" : "MANAGER";
+          patch.messages = [...(current.messages || []), newMessage(body, authorRole, (current.messages || [])[0]?.dialogueType || "general")];
           metadata.messageCount = patch.messages.length;
-          auditAction = "pd_chat.updated";
+          metadata.contributingRole = authorRole;
+          auditAction = action === "approve" ? "pd_chat.both_documented" : "pd_chat.updated";
         }
         if (action === "submit") {
           patch.submitted_at = now;
@@ -348,10 +376,10 @@
         }
         if (action === "approve") {
           patch.approved_at = now;
-          auditAction = "pd_chat.approved";
         }
         if (action === "return") {
-          reason = prompt("Why is this chat returned?", "Needs one more clarification before review.");
+          reason = document.querySelector("#pdChatReason").value.trim();
+          if (!reason) throw new Error("Add the return reason first.");
           patch.returned_at = now;
           patch.last_return_reason = reason;
           auditAction = "pd_chat.returned";
@@ -457,11 +485,14 @@
           const evaluation = evaluations.find((item) => item.id === document.querySelector("#evaluationId").value);
           const topic = document.querySelector("#topic").value.trim();
           const body = document.querySelector("#messageText").value.trim();
+          const initiatorRole = document.querySelector("#initiatorRole").value;
+          const dialogueType = document.querySelector("#dialogueType").value;
+          const dialogueDate = document.querySelector("#dialogueDate").value || new Date().toISOString().slice(0, 10);
           if (!employee) throw new Error("Select an employee first.");
           if (!body) throw new Error("Write the first message first.");
           const id = crypto.randomUUID();
-          const state = { status: "draft", owner: "EMPLOYEE", nextAction: "update" };
-          const messages = [newMessage(body)];
+          const state = { status: "draft", owner: initiatorRole, nextAction: "submit" };
+          const messages = [newMessage(body, initiatorRole, dialogueType)];
           await supabaseFetch("/rest/v1/pd_chat_logs", {
             method: "POST",
             headers: { Prefer: "return=minimal" },
@@ -477,7 +508,7 @@
               status: state.status,
               owner_role: state.owner,
               next_action: state.nextAction,
-              topic,
+              topic: `${topic} · ${dialogueType.replaceAll("_", " ")} · ${dialogueDate}`,
               messages,
               visibility: { employeeCanView: true, managerCanView: true, hrbpCanView: false },
               created_by: currentUser.id,
@@ -514,6 +545,7 @@
         }
       })();
     </script>
+    <script src="workflow-guide.js?v=flowcharts-3"></script>
     <script src="detail-shell.js?v=remove-header-nav-1"></script>
   </body>
 </html>

@@ -87,7 +87,8 @@
       }
     </style>
     <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
-    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
+    <link rel="stylesheet" href="product-ui.css?v=flowcharts-3" />
+    <link rel="stylesheet" href="workflow-guide.css?v=flowcharts-3" />
   </head>
   <body>
     <main>
@@ -112,12 +113,12 @@
           <label>Name<input id="name" value="Self-assessment process" required /></label>
           <label>Type
             <select id="processType">
-              <option value="self_assessment">Self-assessment</option>
-              <option value="downward_evaluation">Downward evaluation</option>
-              <option value="upward_feedback">Upward feedback</option>
-              <option value="survey">Survey</option>
-              <option value="end_cycle">End-cycle</option>
-              <option value="mid_cycle">Mid-cycle</option>
+              <option value="downward_evaluation">Downward — Manager evaluation</option>
+              <option value="self_assessment">Upward — Employee self-assessment</option>
+              <option value="upward_feedback">Upward — Employee feedback</option>
+              <option value="survey">Individual — Survey or pulse check</option>
+              <option value="end_cycle">Downward — End-cycle evaluation</option>
+              <option value="mid_cycle">Downward — Mid-cycle evaluation</option>
             </select>
           </label>
           <label>Form Template<select id="formTemplateId"></select></label>
@@ -425,6 +426,7 @@
         }
       })();
     </script>
+    <script src="workflow-guide.js?v=flowcharts-3"></script>
     <script src="detail-shell.js?v=remove-header-nav-1"></script>
   </body>
 </html>

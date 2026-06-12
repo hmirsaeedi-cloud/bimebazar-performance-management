@@ -37,7 +37,8 @@
       @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
     </style>
     <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
-    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
+    <link rel="stylesheet" href="product-ui.css?v=flowcharts-3" />
+    <link rel="stylesheet" href="workflow-guide.css?v=flowcharts-3" />
   </head>
   <body>
     <main>
@@ -68,7 +69,12 @@
       </section>
 
       <section>
-        <div class="toolbar"><div><h2>Promotion Cases</h2><p id="countLabel">Loading...</p></div></div>
+        <div class="toolbar">
+          <div><h2>Promotion Cases</h2><p id="countLabel">Loading...</p></div>
+          <label>Decision reason
+            <input id="promotionReason" placeholder="Required for hold, decline, or return" />
+          </label>
+        </div>
         <table>
           <thead><tr><th>Employee</th><th>Promotion</th><th>State</th><th>Evidence</th><th>Actions</th></tr></thead>
           <tbody id="rows"></tbody>
@@ -87,10 +93,13 @@
       const countLabel = document.querySelector("#countLabel");
       const stateByStatus = {
         draft:{ status:"draft", owner:"MANAGER", nextAction:"submit" },
-        submitted:{ status:"submitted", owner:"MANAGER", nextAction:"manager_approve" },
-        manager_approved:{ status:"manager_approved", owner:"HRBP", nextAction:"hrbp_approve" },
+        submitted:{ status:"submitted", owner:"HRBP", nextAction:"review" },
+        hrbp_review:{ status:"hrbp_review", owner:"HRBP", nextAction:"decide" },
+        on_hold:{ status:"on_hold", owner:"HRBP", nextAction:"reopen" },
+        manager_approved:{ status:"manager_approved", owner:"HRBP", nextAction:"review" },
         hrbp_approved:{ status:"hrbp_approved", owner:"HR_ADMIN", nextAction:"approve" },
         approved:{ status:"approved", owner:"SYSTEM", nextAction:null },
+        declined:{ status:"declined", owner:"SYSTEM", nextAction:null },
         returned:{ status:"returned", owner:"MANAGER", nextAction:"update" },
         cancelled:{ status:"cancelled", owner:"SYSTEM", nextAction:null },
       };
@@ -127,11 +136,11 @@
           <td>${item.rationale}<div class="muted"><code>${JSON.stringify(item.evidence || {})}</code></div></td>
           <td class="actions">
             ${["draft","returned"].includes(item.status) ? `<button data-action="submit" data-id="${item.id}">Submit</button>` : ""}
-            ${item.status === "submitted" ? `<button data-action="manager_approve" data-id="${item.id}">Manager approve</button>` : ""}
-            ${item.status === "manager_approved" ? `<button data-action="hrbp_approve" data-id="${item.id}">HRBP approve</button>` : ""}
+            ${["submitted","hrbp_review","manager_approved"].includes(item.status) ? `<button data-action="hrbp_approve" data-id="${item.id}">Approve for HR Admin</button><button class="secondary" data-action="hold" data-id="${item.id}">Place on hold</button><button class="warning" data-action="decline" data-id="${item.id}">Decline</button>` : ""}
+            ${item.status === "on_hold" ? `<button data-action="reopen" data-id="${item.id}">Reopen review</button>` : ""}
             ${item.status === "hrbp_approved" ? `<button data-action="approve" data-id="${item.id}">Final approve</button>` : ""}
-            ${["submitted","manager_approved","hrbp_approved"].includes(item.status) ? `<button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
-            ${!["approved","cancelled"].includes(item.status) ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button><button class="secondary" data-action="cancel" data-id="${item.id}">Cancel</button>` : ""}
+            ${item.status === "hrbp_approved" ? `<button class="warning" data-action="return" data-id="${item.id}">Return</button>` : ""}
+            ${!["approved","declined","cancelled"].includes(item.status) ? `<button class="secondary" data-action="visibility" data-id="${item.id}">Visibility</button><button class="secondary" data-action="cancel" data-id="${item.id}">Cancel</button>` : ""}
           </td>
         </tr>`).join("");
         document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button.dataset.id, button.dataset.action).catch((error) => showMessage(error.message, "error"))));
@@ -165,19 +174,22 @@
       }
       async function handleAction(id, action) {
         const [current] = await supabaseFetch(`/rest/v1/promotion_cases?id=eq.${id}&select=*`);
-        const stateMap = { submit:"submitted", manager_approve:"manager_approved", hrbp_approve:"hrbp_approved", approve:"approved", return:"returned", cancel:"cancelled", visibility:current.status };
+        const stateMap = { submit:"submitted", hrbp_approve:"hrbp_approved", hold:"on_hold", reopen:"hrbp_review", decline:"declined", approve:"approved", return:"returned", cancel:"cancelled", visibility:current.status };
         const state = stateByStatus[stateMap[action]];
         const patch = { status:state.status, owner_role:state.owner, next_action:state.nextAction, updated_by:currentUser.id, updated_at:new Date().toISOString() };
+        const needsReason = ["hold", "decline", "return"].includes(action);
+        const reason = needsReason ? document.querySelector("#promotionReason").value.trim() : "";
+        if (needsReason && !reason) throw new Error("Add the decision reason first.");
         if (action === "submit") patch.submitted_at = new Date().toISOString();
-        if (action === "manager_approve") patch.manager_approved_at = new Date().toISOString();
         if (action === "hrbp_approve") patch.hrbp_approved_at = new Date().toISOString();
         if (action === "approve") patch.approved_at = new Date().toISOString();
-        if (action === "return") { patch.returned_at = new Date().toISOString(); patch.last_return_reason = "Returned from temporary scaffold"; }
+        if (needsReason) patch.last_return_reason = reason;
+        if (action === "return") patch.returned_at = new Date().toISOString();
         if (action === "cancel") patch.cancelled_at = new Date().toISOString();
         if (action === "visibility") { patch.visibility = { employeeCanView:true, managerCanView:true, hrbpCanView:true, hrAdminCanView:true }; patch.visibility_changed_at = new Date().toISOString(); }
         await supabaseFetch(`/rest/v1/promotion_cases?id=eq.${id}`, { method:"PATCH", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(patch) });
-        const auditAction = action === "manager_approve" ? "promotion.manager_approved" : action === "hrbp_approve" ? "promotion.hrbp_approved" : action === "visibility" ? "promotion.visibility_changed" : `promotion.${action === "return" ? "returned" : action === "cancel" ? "cancelled" : action === "approve" ? "approved" : "submitted"}`;
-        await writeAudit(auditAction, current, current.status, state.status, { owner:state.owner, nextAction:state.nextAction, reason:patch.last_return_reason || null });
+        const auditAction = action === "hrbp_approve" ? "promotion.hrbp_approved" : action === "visibility" ? "promotion.visibility_changed" : `promotion.${action}`;
+        await writeAudit(auditAction, current, current.status, state.status, { owner:state.owner, nextAction:state.nextAction, reason:reason || null });
         showMessage("Promotion action saved and audit event written.", "success");
         await loadCases();
       }
@@ -185,6 +197,7 @@
       document.querySelector("#reloadButton").addEventListener("click", () => loadCases().catch((error) => showMessage(error.message, "error")));
       (async function init() { try { await ensureToken(); await loadProfiles(); await loadCases(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load promotion cases"; } })();
     </script>
+    <script src="workflow-guide.js?v=flowcharts-3"></script>
     <script src="detail-shell.js?v=remove-header-nav-1"></script>
   </body>
 </html>

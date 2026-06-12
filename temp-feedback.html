@@ -37,7 +37,8 @@
       @media (max-width:980px) { header,.toolbar { align-items:stretch; flex-direction:column; } form,.grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
     </style>
     <link rel="stylesheet" href="detail-ui.css?v=sidebar-brand-standard-1" />
-    <link rel="stylesheet" href="product-ui.css?v=sidebar-brand-black-1" />
+    <link rel="stylesheet" href="product-ui.css?v=flowcharts-3" />
+    <link rel="stylesheet" href="workflow-guide.css?v=flowcharts-3" />
   </head>
   <body>
     <main>
@@ -53,7 +54,10 @@
         <h2>Create Request</h2>
         <form id="createForm">
           <label>Subject<select id="subjectUserId"></select></label>
-          <label>Recipient<select id="recipientUserId" required></select></label>
+          <label>Recipients
+            <select id="recipientUserId" multiple size="4" required></select>
+            <small id="recipientHelp">Select one or more active colleagues.</small>
+          </label>
           <label>Anonymous<select id="isAnonymous"><option value="true">Yes</option><option value="false">No</option></select></label>
           <label>Min Responses<input id="minResponseCount" type="number" min="1" max="20" value="3" /></label>
           <label>Due Date<input id="dueAt" type="datetime-local" /></label>
@@ -80,6 +84,7 @@
       const publishableKey = "sb_publishable_aEtaP2vsKfYpN50nuo2CSg_tU1nLEfc";
       let accessToken = localStorage.getItem("bb_access_token") || "";
       let currentUser = null;
+      let recipientProfiles = [];
       const message = document.querySelector("#message");
       const rows = document.querySelector("#rows");
       const countLabel = document.querySelector("#countLabel");
@@ -108,10 +113,23 @@
         await supabaseFetch("/rest/v1/audit_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ actor_user_id:currentUser.id, target_user_id:request.subject_user_id || request.requester_user_id, action, entity_type:"feedback_request", entity_id:request.id, from_status:fromStatus, to_status:toStatus, metadata:{ owner:metadata.owner, nextAction:metadata.nextAction, isAnonymous:request.is_anonymous, responseCount:request.response_count, ...metadata } }) });
       }
       async function loadRecipients() {
-        const profiles = await supabaseFetch("/rest/v1/profiles?select=id,display_name,email,role_code,account_status&account_status=eq.active&order=display_name.asc&limit=200");
-        const options = profiles.map((profile) => `<option value="${profile.id}">${profile.display_name} · ${profile.role_code}</option>`).join("");
+        recipientProfiles = await supabaseFetch("/rest/v1/profiles?select=id,display_name,email,role_code,account_status,manager_id&account_status=eq.active&order=display_name.asc&limit=200");
+        const options = recipientProfiles.map((profile) => `<option value="${profile.id}">${profile.display_name} · ${profile.role_code}</option>`).join("");
         document.querySelector("#subjectUserId").innerHTML = options;
-        document.querySelector("#recipientUserId").innerHTML = options;
+        document.querySelector("#recipientUserId").innerHTML = recipientProfiles
+          .filter((profile) => profile.id !== currentUser.id)
+          .map((profile) => `<option value="${profile.id}">${profile.display_name} · ${profile.role_code}</option>`)
+          .join("");
+        updateRecipientHelp();
+      }
+      function updateRecipientHelp() {
+        const subjectId = document.querySelector("#subjectUserId").value;
+        const recipientIds = Array.from(document.querySelector("#recipientUserId").selectedOptions).map((option) => option.value);
+        const subject = recipientProfiles.find((profile) => profile.id === subjectId);
+        const includesManager = Boolean(subject?.manager_id && recipientIds.includes(subject.manager_id));
+        document.querySelector("#recipientHelp").textContent = includesManager
+          ? "The subject's manager is selected. Their response may not be effectively anonymous."
+          : `${recipientIds.length} active recipient${recipientIds.length === 1 ? "" : "s"} selected.`;
       }
       async function loadRequests() {
         const requests = await supabaseFetch("/rest/v1/feedback_requests?select=*&order=updated_at.desc");
@@ -142,6 +160,9 @@
         event.preventDefault();
         const state = stateByStatus.draft;
         const id = crypto.randomUUID();
+        const recipientIds = Array.from(document.querySelector("#recipientUserId").selectedOptions).map((option) => option.value);
+        if (!recipientIds.length) throw new Error("Select at least one active recipient.");
+        if (recipientIds.includes(currentUser.id)) throw new Error("The requester cannot also be a recipient.");
         const request = {
           id,
           requester_user_id:currentUser.id,
@@ -163,8 +184,8 @@
           updated_by:currentUser.id,
         };
         await supabaseFetch("/rest/v1/feedback_requests", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(request) });
-        await supabaseFetch("/rest/v1/feedback_request_recipients", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ feedback_request_id:id, recipient_user_id:document.querySelector("#recipientUserId").value }) });
-        await writeAudit("feedback.created", request, null, state.status, { owner:state.owner, nextAction:state.nextAction });
+        await supabaseFetch("/rest/v1/feedback_request_recipients", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify(recipientIds.map((recipientUserId) => ({ feedback_request_id:id, recipient_user_id:recipientUserId }))) });
+        await writeAudit("feedback.created", request, null, state.status, { owner:state.owner, nextAction:state.nextAction, recipientCount:recipientIds.length });
         showMessage("Feedback request created and audit event written.", "success");
         await loadRequests();
       }
@@ -222,9 +243,12 @@
         await writeAudit(auditAction, current, current.status, state.status, { owner:state.owner, nextAction:state.nextAction });
       }
       document.querySelector("#createForm").addEventListener("submit", createRequest);
+      document.querySelector("#subjectUserId").addEventListener("change", updateRecipientHelp);
+      document.querySelector("#recipientUserId").addEventListener("change", updateRecipientHelp);
       document.querySelector("#reloadButton").addEventListener("click", () => loadRequests().catch((error) => showMessage(error.message, "error")));
       (async function init() { try { await ensureToken(); await loadRecipients(); await loadRequests(); } catch (error) { showMessage(error.message, "error"); countLabel.textContent = "Could not load feedback requests"; } })();
     </script>
+    <script src="workflow-guide.js?v=flowcharts-3"></script>
     <script src="detail-shell.js?v=remove-header-nav-1"></script>
   </body>
 </html>
